@@ -1,0 +1,94 @@
+"""Error types and WeChat response normalization."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Mapping
+
+
+@dataclass(frozen=True)
+class WeChatErrorDetail:
+    """Safe error details from a WeChat API response."""
+
+    operation: str
+    errcode: int | None
+    errmsg: str | None
+    hint: str
+
+
+class WeChatAPIError(RuntimeError):
+    """Raised when a WeChat API response contains an error code."""
+
+    def __init__(self, detail: WeChatErrorDetail) -> None:
+        self.detail = detail
+        super().__init__(
+            f"[{detail.operation}] errcode={detail.errcode} "
+            f"errmsg={detail.errmsg}\n  hint: {detail.hint}"
+        )
+
+
+def check_wechat_response(operation: str, response: Mapping[str, Any]) -> None:
+    """Raise `WeChatAPIError` when a WeChat response indicates failure."""
+    errcode = response.get("errcode")
+    if errcode is None or errcode == 0:
+        return
+    errmsg = response.get("errmsg", "")
+    hint = hint_for_error(operation, errcode, errmsg)
+    raise WeChatAPIError(
+        WeChatErrorDetail(
+            operation=operation,
+            errcode=errcode,
+            errmsg=errmsg,
+            hint=hint,
+        )
+    )
+
+
+_ERRCODE_HINTS: dict[int, str] = {
+    -1: "微信系统繁忙，请稍后重试。",
+    40001: "access_token 无效或已过期，请检查 AppID/AppSecret 并重新获取 token。",
+    40002: "grant_type 不合法，请确认使用 client_credential。",
+    40003: "AppID 不合法，请检查 WECHAT_APPID 环境变量。",
+    40004: "媒体类型不合法。",
+    40007: "invalid media_id：请确认 thumb_media_id 来自永久素材上传（material/add_material），而非正文图片接口（media/uploadimg）。",
+    40009: "图片尺寸或格式不合法，建议使用 jpg/png 且不超过 1 MB。",
+    41001: "缺少 access_token 参数。",
+    42001: "access_token 已过期，请刷新 token 缓存。",
+    43002: "需要 POST 请求。",
+    45009: "接口调用频率超限，请稍后重试。",
+    45064: "创建草稿频率超限。",
+    48001: "API 无权限，请确认公众号已认证且接口权限已开通。",
+    61004: "access_token 过期或 IP 不在白名单，请检查公众号后台 IP 白名单设置。",
+    87009: "IP 不在白名单中，请在公众号后台 → 设置与开发 → 基本配置中添加本机 IP。",
+}
+
+_OPERATION_HINTS: dict[str, str] = {
+    "get_access_token": "检查 AppID、AppSecret 是否正确，IP 是否在白名单。",
+    "upload_cover_image": "检查图片路径、格式（jpg/png）和大小（<1MB）。",
+    "upload_body_image": "检查图片路径、格式（jpg/png）和大小（<1MB）。",
+    "add_draft": "检查 title、content、thumb_media_id 是否有效。",
+    "submit_publish": "检查 media_id 是否为有效草稿 ID。",
+    "get_publish_status": "检查 publish_id 是否有效。",
+}
+
+
+def hint_for_error(operation: str, errcode: int | None, errmsg: str | None) -> str:
+    """Return a safe troubleshooting hint for a WeChat API error."""
+    parts: list[str] = []
+
+    if errcode and errcode in _ERRCODE_HINTS:
+        parts.append(_ERRCODE_HINTS[errcode])
+
+    if operation in _OPERATION_HINTS:
+        parts.append(_OPERATION_HINTS[operation])
+
+    if "invalid ip" in (errmsg or "").lower() or "ip" in (errmsg or "").lower():
+        parts.append("请在公众号后台 → 设置与开发 → 基本配置中添加本机 IP 到白名单。")
+
+    if "access_token" in (errmsg or "").lower() and errcode not in (40001, 42001):
+        parts.append("尝试删除 .wechat_publish/token.json 后重试。")
+
+    if not parts:
+        parts.append(f"未知错误，请查阅微信官方文档（errcode={errcode}）。")
+
+    return " ".join(parts)

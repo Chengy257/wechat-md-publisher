@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wechat-md-publisher"
+version = "0.1.0"
+description = "Render Markdown articles into WeChat Official Account draft HTML."
+readme = "docs/project_start_plan.md"
+requires-python = ">=3.10"
+dependencies = [
+  "beautifulsoup4>=4.12",
+  "markdown-it-py>=3.0",
+  "premailer>=3.10",
+  "python-dotenv>=1.0",
+  "pyyaml>=6.0",
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "responses>=0.25",
+]
+cli-typer = [
+  "typer>=0.12",
+]
+
+[project.scripts]
+wechat-publish = "wechat_publish.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["wechat_publish*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+

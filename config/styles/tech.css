@@ -1,0 +1,235 @@
+/* 暗夜主题 — 深色科技风，适合技术/编程类文章 */
+
+.wechat-content {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: #c9d1d9;
+  background-color: #0d1117;
+  padding: 20px 16px;
+  overflow-wrap: break-word;
+}
+
+/* 一级标题 */
+.wechat-content h1 {
+  display: table;
+  padding: 0 1em;
+  border-bottom: 2px solid #58a6ff;
+  margin: 1.5em auto 0.8em;
+  font-size: 22px;
+  font-weight: bold;
+  text-align: center;
+  color: #f0f6fc;
+}
+
+/* 二级标题 */
+.wechat-content h2 {
+  padding: 0.3em 1em;
+  margin: 2em 0 1em;
+  font-size: 18px;
+  font-weight: bold;
+  color: #f0f6fc;
+  border-left: 4px solid #58a6ff;
+  border-bottom: 1px solid #21262d;
+  padding-bottom: 0.3em;
+}
+
+/* 三级标题 */
+.wechat-content h3 {
+  padding-left: 10px;
+  border-left: 3px solid #58a6ff;
+  margin: 1.5em 0 0.6em;
+  font-size: 17px;
+  font-weight: bold;
+  color: #c9d1d9;
+  line-height: 1.4;
+}
+
+.wechat-content .h3-like {
+  padding-left: 10px;
+  border-left: 3px solid #58a6ff;
+  margin: 1.5em 0 0.6em;
+  font-size: 17px;
+  font-weight: bold;
+  color: #c9d1d9;
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* 段落 */
+.wechat-content p {
+  margin: 1em 0;
+  color: #c9d1d9;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+/* 引用 */
+.wechat-content blockquote {
+  padding: 1em 1em 1em 1.2em;
+  border-left: 4px solid #58a6ff;
+  border-radius: 6px;
+  color: #8b949e;
+  background: #161b22;
+  margin: 1.2em 0;
+}
+
+.wechat-content blockquote p {
+  margin: 0;
+  font-size: 15px;
+  color: #8b949e;
+}
+
+/* 列表 */
+.wechat-content ul,
+.wechat-content ol {
+  margin: 0.8em 0;
+  padding-left: 1.5em;
+  color: #c9d1d9;
+}
+
+.wechat-content li {
+  margin: 0.3em 0;
+  color: #c9d1d9;
+}
+
+/* 行内代码 */
+.wechat-content code {
+  font-family: Consolas, Monaco, "Courier New", monospace;
+  font-size: 14px;
+  color: #ff7b72;
+  background: rgba(110, 118, 129, 0.2);
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+/* 代码块 */
+.wechat-content pre {
+  font-size: 14px;
+  overflow-x: auto;
+  border-radius: 8px;
+  padding: 16px;
+  line-height: 1.6;
+  margin: 1em 0;
+  background: #161b22;
+  border: 1px solid #21262d;
+}
+
+.wechat-content pre code {
+  display: block;
+  padding: 0;
+  color: #c9d1d9;
+  background: transparent;
+  font-size: 13px;
+  border-radius: 0;
+}
+
+/* 粗体 */
+.wechat-content strong {
+  font-weight: bold;
+  color: #58a6ff;
+}
+
+/* 斜体 */
+.wechat-content em {
+  font-style: italic;
+  color: #c9d1d9;
+}
+
+/* 链接 */
+.wechat-content a {
+  color: #58a6ff;
+  text-decoration: none;
+}
+
+/* 图片 */
+.wechat-content img {
+  display: block;
+  max-width: 100%;
+  margin: 1em auto;
+  border-radius: 6px;
+  border: 1px solid #21262d;
+}
+
+.wechat-content figcaption {
+  text-align: center;
+  color: #484f58;
+  font-size: 14px;
+  margin: 0.3em 0 1em;
+}
+
+/* 分隔线 */
+.wechat-content hr {
+  border: none;
+  height: 1px;
+  background: #21262d;
+  margin: 2em 0;
+}
+
+/* 表格 */
+.wechat-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 14px;
+}
+
+.wechat-content th,
+.wechat-content td {
+  border: 1px solid #21262d;
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.wechat-content th {
+  font-weight: bold;
+  background: #161b22;
+  color: #f0f6fc;
+}
+
+.wechat-content tr.row-alt {
+  background-color: #161b22;
+}
+
+/* 列表兼容 */
+.list-item {
+  margin: 0 0 8px;
+  line-height: 1.75;
+  text-align: justify;
+}
+
+.list-marker {
+  color: #58a6ff;
+  font-weight: bold;
+}
+
+/* 脚注 */
+.footnote-ref {
+  color: #58a6ff;
+  font-size: 0.8em;
+  font-weight: 600;
+  vertical-align: super;
+  margin: 0 2px;
+}
+
+.footnotes {
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid #21262d;
+  font-size: 14px;
+  color: #484f58;
+}
+
+.footnotes ol {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.footnotes li {
+  margin-bottom: 6px;
+  color: #8b949e;
+}
+
+.footnote-url {
+  color: #58a6ff;
+}

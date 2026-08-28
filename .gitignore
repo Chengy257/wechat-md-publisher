@@ -1,0 +1,23 @@
+# secrets & runtime state
+.env
+.wechat_publish/
+
+# build & tooling artifacts
+build/
+.pytest_cache/
+__pycache__/
+.venv/
+*.egg-info/
+
+# vendored reference repo (has its own .git)
+reference_project/
+
+# agent/session residue
+.zcode/
+claude_resume.txt
+hermes_resume.txt
+prompt.txt
+
+# working drafts & media assets: only the example article is tracked
+input/*
+!input/article.example.md

@@ -1,0 +1,44 @@
+# Copy this file to config/publish.yaml and adjust local defaults.
+
+default_author: "Cy257"
+default_mode: "draft"
+
+article:
+  markdown: "input/article.md"
+  cover: "input/cover.png"
+  source_url: ""
+  need_open_comment: 1
+  only_fans_can_comment: 0
+
+paths:
+  build_dir: "build"
+  state_dir: ".wechat_publish"
+  token_cache: ".wechat_publish/token.json"
+  image_cache: ".wechat_publish/image_cache.json"
+  cover_cache: ".wechat_publish/cover_cache.json"
+  posts_dir: ".wechat_publish/posts"
+
+wechat:
+  appid_env:
+    - "WECHAT_APPID"
+    - "WECHAT_APP_ID"
+  appsecret_env:
+    - "WECHAT_APPSECRET"
+    - "WECHAT_APP_SECRET"
+  author_env:
+    - "WECHAT_DEFAULT_AUTHOR"
+    - "WECHAT_AUTHOR"
+
+safety:
+  dry_run_default: false
+  allow_publish: false
+  mask_token_chars: 6
+
+ai:
+  summary_api_url: ""          # OpenAI-compatible endpoint (default: https://api.deepseek.com/v1)
+  summary_api_key_env: "AI_API_KEY"  # Environment variable name for API key
+  summary_model: ""            # Model name (default: deepseek-chat)
+  cover_api_url: ""            # Gemini API URL (default: https://generativelanguage.googleapis.com)
+  cover_api_key_env: "GEMINI_API_KEY"  # Environment variable name for Gemini key
+  cover_model: ""              # Gemini model (default: gemini-2.0-flash-exp)
+  cover_prompt: ""             # Custom prompt (default: auto-generate from title)
