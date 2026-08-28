@@ -159,14 +159,6 @@ def _convert_headings(soup: BeautifulSoup) -> None:
         tag.name = "p"
         existing = tag.get("class", [])
         tag["class"] = existing + ["h3-like"]
-    """Add alternating row class to tables (premailer cannot inline nth-child)."""
-    for table in soup.find_all("table"):
-        for i, tr in enumerate(table.find_all("tr")):
-            if tr.find_parent("thead"):
-                continue
-            if i % 2 == 1:
-                existing = tr.get("class", [])
-                tr["class"] = existing + ["row-alt"]
 
 
 def _flatten_lists(soup: BeautifulSoup) -> None:

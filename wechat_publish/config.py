@@ -69,16 +69,17 @@ def _load_dotenv(path: Path | None = None) -> Mapping[str, str | None]:
 
 
 def load_env_values(project_dir: Path | None = None) -> Mapping[str, str | None]:
-    """Load environment values from os.environ + .env file."""
+    """Load environment values from os.environ + .env file.
+
+    Real environment variables take precedence over .env file values, and
+    every variable is exposed (AI keys and custom ``*_env`` names resolve
+    from the real environment too, not just the .env file).
+    """
     dotenv_vals = _load_dotenv(
         project_dir / ".env" if project_dir else None
     )
-    merged: dict[str, str | None] = {}
-    merged.update(dotenv_vals)
-    # os.environ takes precedence over .env file
-    for key in list(_APPID_ENVS + _APPSECRET_ENVS + _AUTHOR_ENVS):
-        if key in os.environ:
-            merged[key] = os.environ[key]
+    merged: dict[str, str | None] = dict(dotenv_vals)
+    merged.update(os.environ)
     return merged
 
 

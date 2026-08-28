@@ -231,7 +231,8 @@ def cmd_draft(args: argparse.Namespace) -> int:
 
     # Parse front matter
     text = md_path.read_text(encoding="utf-8")
-    front_matter, _ = parse_front_matter(text)
+    front_matter, body = parse_front_matter(text)
+    body = body.replace("<!--more-->", "")
 
     # Resolve configuration
     cli_values = _resolve_cli_values(args)
@@ -253,7 +254,7 @@ def cmd_draft(args: argparse.Namespace) -> int:
         ai_url, ai_key, ai_model = resolve_ai_config(dict(pub_cfg), dict(env))
         if ai_key:
             print(f"[INFO] generating AI digest via {ai_url} ...")
-            ai_digest = generate_digest(text, ai_url, ai_key, ai_model)
+            ai_digest = generate_digest(body, ai_url, ai_key, ai_model)
             if ai_digest:
                 article = ArticleMetadata(
                     title=article.title,
@@ -268,7 +269,7 @@ def cmd_draft(args: argparse.Namespace) -> int:
 
     # Render Markdown (no styling — raw HTML)
     from .render import render_markdown_to_html, _wrap_preview
-    raw_html = render_markdown_to_html(text.split("\n", 1)[-1] if "---" in text else text)
+    raw_html = render_markdown_to_html(body)
     build_dir = config.build_dir
     build_dir.mkdir(parents=True, exist_ok=True)
 
@@ -283,7 +284,8 @@ def cmd_draft(args: argparse.Namespace) -> int:
         from .mermaid import replace_mermaid_blocks
         mermaid_dir = build_dir / "mermaid"
         wechat_html = replace_mermaid_blocks(
-            wechat_html, mermaid_dir, engine=args.mermaid_engine
+            wechat_html, mermaid_dir, engine=args.mermaid_engine,
+            src_base_dir=md_path.parent,
         )
 
     # Save preview
@@ -353,16 +355,31 @@ def cmd_draft(args: argparse.Namespace) -> int:
         ai_url, ai_key, ai_model, ai_prompt = resolve_cover_ai_config(
             dict(pub_cfg), dict(env)
         )
-        if ai_key:
-            print(f"[INFO] generating AI cover image for '{article.title}' ...")
-            ai_cover_path = build_dir / "ai_cover.png"
-            try:
-                cover = generate_cover_image(
-                    article.title, ai_cover_path, ai_url, ai_key, ai_model, ai_prompt
-                )
-                print(f"[INFO] AI cover saved: {cover}")
-            except Exception as e:
-                print(f"[WARN] AI cover generation failed: {e}")
+        if not ai_key:
+            print(
+                f"[ERROR] --ai-cover requested but no API key found "
+                f"(set it via the .env file or the environment).",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"[INFO] generating AI cover image for '{article.title}' ...")
+        ai_cover_path = build_dir / "ai_cover.png"
+        try:
+            cover = generate_cover_image(
+                article.title, ai_cover_path, ai_url, ai_key, ai_model, ai_prompt
+            )
+            print(f"[INFO] AI cover saved: {cover}")
+        except Exception as e:
+            print(f"[ERROR] AI cover generation failed: {e}", file=sys.stderr)
+            return 1
+
+    if not cover.exists():
+        print(
+            f"[ERROR] Cover image not found: {cover}. "
+            f"Use --cover or --ai-cover.",
+            file=sys.stderr,
+        )
+        return 1
 
     cover_result = upload_cover_image(token.value, cover, cover_cache)
 

@@ -14,9 +14,11 @@ from .state import load_json_mapping, save_json_mapping
 
 API_BASE = "https://api.weixin.qq.com"
 
-# Conservative defaults: jpg/png under 1 MB
+# Conservative defaults: jpg/png under 1 MB for body images (media/uploadimg);
+# permanent material (material/add_material) allows up to 10 MB for covers.
 _ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp"}
-_MAX_IMAGE_BYTES = 1 * 1024 * 1024  # 1 MB
+_MAX_BODY_IMAGE_BYTES = 1 * 1024 * 1024  # 1 MB
+_MAX_COVER_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 @dataclass(frozen=True)
@@ -49,7 +51,7 @@ def validate_cover_image(path: Path) -> None:
         raise FileNotFoundError(f"Cover image not found: {path}")
     if not path.is_file():
         raise ValueError(f"Cover path is not a file: {path}")
-    _validate_image(path)
+    _validate_image(path, _MAX_COVER_BYTES)
 
 
 def validate_body_image(path: Path) -> None:
@@ -58,10 +60,10 @@ def validate_body_image(path: Path) -> None:
         raise FileNotFoundError(f"Body image not found: {path}")
     if not path.is_file():
         raise ValueError(f"Body image path is not a file: {path}")
-    _validate_image(path)
+    _validate_image(path, _MAX_BODY_IMAGE_BYTES)
 
 
-def _validate_image(path: Path) -> None:
+def _validate_image(path: Path, max_bytes: int) -> None:
     """Common image validation."""
     ext = path.suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
@@ -70,9 +72,9 @@ def _validate_image(path: Path) -> None:
             f"Supported: {', '.join(sorted(_ALLOWED_EXTENSIONS))}"
         )
     size = path.stat().st_size
-    if size > _MAX_IMAGE_BYTES:
+    if size > max_bytes:
         raise ValueError(
-            f"Image too large: {size / 1024:.1f} KB (max {_MAX_IMAGE_BYTES / 1024:.0f} KB): {path}"
+            f"Image too large: {size / 1024:.1f} KB (max {max_bytes / 1024:.0f} KB): {path}"
         )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 from pathlib import Path
 
@@ -77,7 +78,12 @@ def generate_cover_image(
     if not image_data:
         raise ValueError("Gemini API returned no image in response")
 
-    image_bytes = base64.b64decode(image_data)
+    try:
+        image_bytes = base64.b64decode(image_data, validate=True)
+    except (binascii.Error, ValueError) as e:
+        raise ValueError(f"Gemini API returned invalid base64 image data: {e}") from e
+    if not image_bytes:
+        raise ValueError("Gemini API returned an empty image")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(image_bytes)
     return output_path

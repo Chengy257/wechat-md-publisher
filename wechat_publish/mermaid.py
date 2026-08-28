@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -74,6 +75,7 @@ def replace_mermaid_blocks(
     html: str,
     output_dir: Path,
     engine: str = "mmdc",
+    src_base_dir: Path | None = None,
 ) -> str:
     """Replace mermaid code blocks with rendered PNG images.
 
@@ -81,6 +83,9 @@ def replace_mermaid_blocks(
         html: HTML content with potential mermaid blocks.
         output_dir: Directory to save rendered PNG files.
         engine: Rendering engine - "mmdc" or "api".
+        src_base_dir: Directory the generated ``<img src>`` should resolve
+            against (typically the markdown file's directory). When omitted,
+            the src falls back to the output file's own path.
 
     Returns:
         HTML with mermaid blocks replaced by <img> tags.
@@ -104,7 +109,7 @@ def replace_mermaid_blocks(
             img_tag = soup.new_tag(
                 "img",
                 attrs={
-                    "src": str(img_path),
+                    "src": _image_src_for(img_path, src_base_dir),
                     "alt": f"Mermaid diagram {index + 1}",
                 },
             )
@@ -114,3 +119,14 @@ def replace_mermaid_blocks(
             # Leave the block as-is
 
     return str(soup)
+
+
+def _image_src_for(img_path: Path, src_base_dir: Path | None) -> str:
+    """Return the img src so that ``src_base_dir / src`` resolves to img_path."""
+    if src_base_dir is None:
+        return str(img_path)
+    try:
+        return Path(os.path.relpath(img_path, src_base_dir)).as_posix()
+    except ValueError:
+        # Different drives (Windows): fall back to the absolute path
+        return str(img_path)
