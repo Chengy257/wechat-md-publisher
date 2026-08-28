@@ -2,10 +2,7 @@
 
 from pathlib import Path
 
-import pytest
-
 from wechat_publish.html_processor import (
-    ImageReference,
     convert_links_to_footnotes,
     discover_images,
     inline_css,

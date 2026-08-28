@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "wechat-md-publisher"
 version = "0.1.0"
 description = "Render Markdown articles into WeChat Official Account draft HTML."
-readme = "docs/project_start_plan.md"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "beautifulsoup4>=4.12",
@@ -21,9 +21,10 @@ dependencies = [
 dev = [
   "pytest>=8.0",
   "responses>=0.25",
+  "ruff>=0.6",
 ]
-cli-typer = [
-  "typer>=0.12",
+cover-compress = [
+  "Pillow>=10.0",
 ]
 
 [project.scripts]
@@ -32,7 +33,18 @@ wechat-publish = "wechat_publish.cli:main"
 [tool.setuptools.packages.find]
 include = ["wechat_publish*"]
 
+[tool.setuptools.package-data]
+wechat_publish = ["themes/*.css"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
 
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# E501 (line length) is advisory here; long f-strings/print layouts are kept
+ignore = ["E501"]

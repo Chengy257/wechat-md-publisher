@@ -1,21 +1,14 @@
 """Configuration tests: YAML loading, precedence, front matter, credentials."""
 
-import os
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 from wechat_publish.config import (
-    ArticleMetadata,
-    PublisherConfig,
     load_publish_config,
     load_theme_css,
     resolve_config,
     resolve_credentials,
     resolve_style_path,
 )
-
 
 # ── YAML loading ────────────────────────────────────────────────
 

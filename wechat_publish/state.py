@@ -6,10 +6,12 @@ import json
 import os
 import re
 import tempfile
-from datetime import datetime, timezone
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+
 
 @dataclass(frozen=True)
 class PostState:

@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 import yaml
 from markdown_it import MarkdownIt
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
-from pygments.lexers import get_lexer_by_name, TextLexer
+from pygments.lexers import TextLexer, get_lexer_by_name
 
 from .html_processor import process_article_html
 

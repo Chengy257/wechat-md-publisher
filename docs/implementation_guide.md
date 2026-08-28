@@ -10,21 +10,10 @@ CLI arguments > Markdown front matter > config/publish.yaml > environment defaul
 
 The stable configuration file should hold account-independent publishing defaults, not secrets. App credentials stay in environment variables or `.env`.
 
-Supported environment variable names should include:
-
-```text
-WECHAT_APPID
-WECHAT_APPSECRET
-WECHAT_DEFAULT_AUTHOR
-```
-
-For compatibility with the current local `.env`, also accept:
-
-```text
-WECHAT_APP_ID
-WECHAT_APP_SECRET
-WECHAT_AUTHOR
-```
+Environment values are read from a project-root `.env` file **and** the real
+process environment; real environment variables take precedence. Every
+variable is exposed, so AI keys (`AI_API_KEY`, `GEMINI_API_KEY`) and custom
+`*_env` names configured in `publish.yaml` resolve from either source.
 
 ## Module Responsibilities
 
@@ -51,6 +40,18 @@ WECHAT_AUTHOR
 
 `wechat_publish.errors`
 : Normalize WeChat error responses and provide actionable hints.
+
+`wechat_publish.http`
+: Shared HTTP layer: transient-failure retry (connection errors, timeouts, 5xx) and clean wrapping of non-JSON responses.
+
+`wechat_publish.ai_summary`
+: Optional AI digest generation via OpenAI-compatible chat APIs.
+
+`wechat_publish.ai_cover`
+: Optional AI cover generation via the Gemini image API.
+
+`wechat_publish.mermaid`
+: Render mermaid code blocks to PNG (local mmdc CLI or mermaid.ink API) with content-hash caching.
 
 ## HTML Rules
 
@@ -112,15 +113,12 @@ Write local state under `.wechat_publish/`:
   "title": "Article title",
   "source_markdown": "input/article.md",
   "wechat_html": "build/article.wechat.html",
-  "cover": "assets/cover.png",
-  "draft_media_id": "MEDIA_ID",
-  "mode": "draft",
   "created_at": "2026-05-28T10:00:00+08:00",
-  "images": {
-    "images/fig1.png": "https://mmbiz.qpic.cn/..."
-  }
+  "draft_media_id": "MEDIA_ID"
 }
 ```
+
+`draft_media_id` is only present when a draft was actually created.
 
 ## Error Handling
 
@@ -138,16 +136,21 @@ Do not log complete `access_token`, `AppSecret`, or raw `.env` values. Token log
 
 ## CLI Commands
 
-Planned command shape:
+Implemented with standard-library `argparse` (entry point `wechat-publish = wechat_publish.cli:main`):
 
 ```bash
-wechat-publish render --md input/article.md --out build/article.wechat.html
-wechat-publish inspect --md input/article.md
-wechat-publish draft --md input/article.md --dry-run
-wechat-publish draft --md input/article.md
+wechat-publish render  --md input/article.md [--out ...] [--preview-out ...] [--style ...|--theme ...]
+wechat-publish inspect --md input/article.md [--style ...|--theme ...]
+wechat-publish draft   --md input/article.md [--dry-run] [--title ...] [--author ...]
+                       [--digest ...] [--cover ...] [--config ...] [--style ...|--theme ...]
+                       [--ai-summary] [--ai-cover] [--mermaid] [--mermaid-engine mmdc|api]
+                       [--autofill-front-matter] [--compress-cover] [--allow-missing-images]
 ```
 
-The CLI implementation can use either `typer` or standard-library `argparse`. That choice should be confirmed before full coding starts.
+`--dry-run` performs all local rendering and validation but never touches the
+network (AI calls are skipped too). Missing covers, failed image uploads, and
+fields exceeding the official `draft/add` limits abort the run with a clear
+error unless explicitly waived.
 
 ## Testing Strategy
 

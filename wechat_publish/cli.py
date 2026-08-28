@@ -7,14 +7,15 @@ import json
 import re
 import sys
 import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence, TypeVar
+from typing import Any, TypeVar
 
 from .config import (
-    ArticleMetadata,
     BUILTIN_THEMES,
+    ArticleMetadata,
     PublisherConfig,
     load_env_values,
     load_publish_config,

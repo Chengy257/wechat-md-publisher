@@ -9,7 +9,6 @@ Covers:
 - cover failure chain aborting instead of crashing with a traceback
 """
 
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,7 +18,6 @@ from wechat_publish.cli import main
 from wechat_publish.config import load_env_values
 from wechat_publish.html_processor import make_wechat_compatible
 from wechat_publish.images import validate_body_image, validate_cover_image
-
 
 # ── cmd_draft front matter handling ─────────────────────────────
 

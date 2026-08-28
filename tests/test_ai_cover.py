@@ -1,7 +1,6 @@
 """AI cover image generation tests with mocked HTTP."""
 
 import base64
-import json
 from pathlib import Path
 from unittest.mock import patch
 

@@ -2,10 +2,7 @@
 
 from pathlib import Path
 
-import pytest
-
-from wechat_publish.render import parse_front_matter, render_markdown_to_html, render_article
-
+from wechat_publish.render import parse_front_matter, render_article, render_markdown_to_html
 
 # ── Front matter parsing ────────────────────────────────────────
 

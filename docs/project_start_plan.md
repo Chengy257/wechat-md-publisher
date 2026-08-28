@@ -1,5 +1,11 @@
 # WeChat Markdown Publisher Project Start Plan
 
+> **Historical document.** This is the original project plan and predates the
+> implementation. Some details (e.g. the tag-based `config/style.yaml` styling
+> approach) were superseded: styling is now done with CSS themes in
+> `wechat_publish/themes/` plus optional `config/style.css`. See `README.md`
+> and `docs/implementation_guide.md` for the current state.
+
 ## Goal
 
 Build a local Python CLI project that renders a Markdown article into WeChat Official Account-compatible HTML and creates a draft in the WeChat backend.

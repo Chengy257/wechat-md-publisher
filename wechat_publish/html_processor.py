@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 from urllib.parse import urlparse
 
+import cssutils
 from bs4 import BeautifulSoup, Tag
 from bs4.element import NavigableString
 from premailer import transform as premailer_transform
 
-import logging
-
-import cssutils
 cssutils.log.setLevel(logging.CRITICAL)
 
 
@@ -246,7 +245,7 @@ def convert_links_to_footnotes(html: str) -> str:
 
     section = soup.new_tag("section", attrs={"class": "footnotes"})
     ol = soup.new_tag("ol")
-    for num, url in footnotes:
+    for _num, url in footnotes:
         li = soup.new_tag("li")
         url_span = soup.new_tag("span", attrs={"class": "footnote-url"})
         url_span.string = url

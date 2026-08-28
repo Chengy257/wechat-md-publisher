@@ -1,9 +1,6 @@
 """AI summary generation tests with mocked HTTP."""
 
-import json
 from unittest.mock import patch
-
-import pytest
 
 from wechat_publish.ai_summary import generate_digest, resolve_ai_config
 

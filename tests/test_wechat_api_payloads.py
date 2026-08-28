@@ -3,7 +3,6 @@
 import json
 import time
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -21,8 +20,7 @@ from wechat_publish.state import (
     save_json_mapping,
     save_post_state,
 )
-from wechat_publish.token import AccessToken, load_cached_token, mask_token
-
+from wechat_publish.token import load_cached_token, mask_token
 
 # ── Draft payload ───────────────────────────────────────────────
 

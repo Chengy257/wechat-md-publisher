@@ -7,7 +7,7 @@ import responses
 
 from wechat_publish.cli import main
 from wechat_publish.http import request_with_retry
-from wechat_publish.token import AccessToken, get_access_token
+from wechat_publish.token import get_access_token
 
 _WX = "https://api.weixin.qq.com"
 

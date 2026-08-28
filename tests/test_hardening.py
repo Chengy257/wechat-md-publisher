@@ -11,9 +11,8 @@ from wechat_publish.draft import DraftArticle, validate_draft_article
 from wechat_publish.errors import WeChatAPIError, WeChatErrorDetail
 from wechat_publish.http import json_response
 from wechat_publish.images import compress_cover, process_images
-from wechat_publish.state import PostState, load_json_mapping, save_post_state, save_json_mapping
+from wechat_publish.state import PostState, load_json_mapping, save_json_mapping, save_post_state
 from wechat_publish.token import AccessToken
-
 
 # ── draft field validation ──────────────────────────────────────
 
@@ -220,7 +219,6 @@ class TestCompressCover:
 
     def test_missing_pillow_returns_original(self, tmp_path: Path, monkeypatch):
         import sys
-        import types
 
         cover = tmp_path / "cover.png"
         cover.write_bytes(b"\x89PNG" + b"\x00" * (2 * 1024 * 1024))
