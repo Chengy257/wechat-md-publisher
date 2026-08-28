@@ -7,9 +7,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests
-
 from .errors import check_wechat_response
+from .http import json_response, request_with_retry
+from .state import save_json_mapping
 
 API_BASE = "https://api.weixin.qq.com"
 
@@ -37,7 +37,7 @@ def load_cached_token(path: Path) -> AccessToken | None:
         if not value or not isinstance(expires_at, (int, float)):
             return None
         return AccessToken(value=str(value), expires_at=int(expires_at))
-    except (json.JSONDecodeError, OSError, KeyError):
+    except (json.JSONDecodeError, OSError):
         return None
 
 
@@ -47,8 +47,8 @@ def request_access_token(appid: str, appsecret: str) -> AccessToken:
         f"{API_BASE}/cgi-bin/token"
         f"?grant_type=client_credential&appid={appid}&secret={appsecret}"
     )
-    resp = requests.get(url, timeout=30)
-    data = resp.json()
+    resp = request_with_retry("GET", url, operation="get_access_token", timeout=30)
+    data = json_response(resp, "get_access_token")
     check_wechat_response("get_access_token", data)
 
     token_value = data["access_token"]
@@ -59,24 +59,31 @@ def request_access_token(appid: str, appsecret: str) -> AccessToken:
 
 
 def _save_token(path: Path, token: AccessToken) -> None:
-    """Persist a token to disk."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "access_token": token.value,
-        "expires_at": token.expires_at,
-    }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    """Persist a token to disk (atomically)."""
+    save_json_mapping(
+        path,
+        {"access_token": token.value, "expires_at": token.expires_at},
+    )
 
 
-def get_access_token(appid: str, appsecret: str, cache_path: Path) -> AccessToken:
-    """Return a cached or freshly requested access token."""
-    cached = load_cached_token(cache_path)
+def get_access_token(
+    appid: str,
+    appsecret: str,
+    cache_path: Path,
+    force_refresh: bool = False,
+) -> AccessToken:
+    """Return a cached or freshly requested access token.
+
+    With ``force_refresh=True`` a new token is requested even when the cache
+    is still valid (used to recover from 40001/42001 mid-run).
+    """
     now = int(time.time())
-
-    if cached and cached.expires_at > now + _REFRESH_MARGIN:
-        remaining = cached.expires_at - now
-        print(f"[INFO] access_token loaded from cache, expires in {remaining}s")
-        return cached
+    if not force_refresh:
+        cached = load_cached_token(cache_path)
+        if cached and cached.expires_at > now + _REFRESH_MARGIN:
+            remaining = cached.expires_at - now
+            print(f"[INFO] access_token loaded from cache, expires in {remaining}s")
+            return cached
 
     token = request_access_token(appid, appsecret)
     _save_token(cache_path, token)
@@ -89,3 +96,10 @@ def mask_token(token_value: str, chars: int = 6) -> str:
     if len(token_value) <= chars * 2:
         return "***"
     return f"{token_value[:chars]}...{token_value[-chars:]}"
+
+
+def mask_appid(appid: str) -> str:
+    """Return a masked appid for display in dry-run/inspect output."""
+    if len(appid) <= 6:
+        return "***"
+    return f"{appid[:4]}****{appid[-2:]}"

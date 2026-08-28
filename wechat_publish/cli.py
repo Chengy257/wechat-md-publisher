@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence, TypeVar
 
 from .config import (
     ArticleMetadata,
+    BUILTIN_THEMES,
     PublisherConfig,
     load_env_values,
     load_publish_config,
@@ -19,6 +23,7 @@ from .config import (
     resolve_style_path,
 )
 from .draft import DraftArticle, add_draft, build_draft_payload
+from .errors import WeChatAPIError
 from .html_processor import (
     convert_links_to_footnotes,
     discover_images,
@@ -26,10 +31,12 @@ from .html_processor import (
     make_wechat_compatible,
     sanitize_html_fragment,
 )
-from .images import process_images, upload_cover_image
+from .images import compress_cover, process_images, upload_cover_image
 from .render import parse_front_matter, render_article
 from .state import PostState, ensure_state_dirs, save_post_state
-from .token import get_access_token, mask_token
+from .token import get_access_token, mask_appid, mask_token
+
+_T = TypeVar("_T")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,8 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Output preview HTML path")
     render_p.add_argument("--style", type=Path, default=None,
                           help="Path to CSS theme file (overrides --theme)")
-    render_p.add_argument("--theme", default=None,
-                          choices=["default", "elegant", "lapis", "simple", "tech"],
+    render_p.add_argument("--theme", default=None, choices=sorted(BUILTIN_THEMES),
                           help="Built-in theme name")
 
     # --- draft ---
@@ -68,8 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Path to publish config YAML")
     draft_p.add_argument("--style", type=Path, default=None,
                          help="Path to CSS theme file (overrides --theme)")
-    draft_p.add_argument("--theme", default=None,
-                         choices=["default", "elegant", "lapis", "simple", "tech"],
+    draft_p.add_argument("--theme", default=None, choices=sorted(BUILTIN_THEMES),
                          help="Built-in theme name")
     draft_p.add_argument("--ai-summary", action="store_true",
                          help="Generate article digest via AI when not specified")
@@ -80,6 +85,15 @@ def build_parser() -> argparse.ArgumentParser:
     draft_p.add_argument("--mermaid-engine", default="mmdc",
                          choices=["mmdc", "api"],
                          help="Mermaid rendering engine (default: mmdc)")
+    draft_p.add_argument("--autofill-front-matter", action="store_true",
+                         help="Generate front matter (title/date/author) and write it "
+                              "back to the Markdown file when it has none")
+    draft_p.add_argument("--compress-cover", action="store_true",
+                         help="Re-encode covers larger than 1 MB as JPEG "
+                              "(requires the optional Pillow dependency)")
+    draft_p.add_argument("--allow-missing-images", action="store_true",
+                         help="Skip images that fail to upload instead of aborting "
+                              "the draft creation")
 
     # --- inspect ---
     inspect_p = subparsers.add_parser("inspect", help="Inspect resolved metadata and assets.")
@@ -89,8 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Path to publish config YAML")
     inspect_p.add_argument("--style", type=Path, default=None,
                            help="Path to CSS theme file (overrides --theme)")
-    inspect_p.add_argument("--theme", default=None,
-                           choices=["default", "elegant", "lapis", "simple", "tech"],
+    inspect_p.add_argument("--theme", default=None, choices=sorted(BUILTIN_THEMES),
                            help="Built-in theme name")
 
     return parser
@@ -107,10 +120,10 @@ def _project_dir() -> Path:
 def _resolve_cli_values(args: argparse.Namespace) -> dict[str, Any]:
     """Extract CLI override values from parsed args."""
     values: dict[str, Any] = {}
-    for key in ("title", "author", "digest", "cover", "mode"):
+    for key in ("title", "author", "digest", "cover"):
         val = getattr(args, key, None)
         if val is not None:
-            values[key] = str(val) if not isinstance(val, Path) else str(val)
+            values[key] = str(val)
     return values
 
 
@@ -121,6 +134,77 @@ def _process_html(html: str, theme_css: str) -> str:
     html = convert_links_to_footnotes(html)
     html = inline_css(html, theme_css)
     return html
+
+
+def _run_with_token_retry(
+    token: Any,
+    appid: str,
+    appsecret: str,
+    token_cache: Path,
+    fn: Callable[[str], _T],
+) -> _T:
+    """Run ``fn(token_value)`` retrying transient failures.
+
+    Recovers once from a token rejected mid-run (40001/42001) by forcing a
+    refresh, and retries busy/rate-limit errors (-1/45009/45064) with a
+    short backoff. Any other error propagates immediately.
+    """
+    refreshed = False
+    for attempt in range(3):
+        try:
+            return fn(token.value)
+        except WeChatAPIError as e:
+            errcode = e.detail.errcode
+            if errcode in (40001, 42001) and not refreshed:
+                refreshed = True
+                print("[INFO] access_token rejected mid-run; refreshing and retrying ...")
+                token = get_access_token(
+                    appid, appsecret, token_cache, force_refresh=True
+                )
+                continue
+            if errcode in (-1, 45009, 45064) and attempt < 2:
+                wait = 3 * (attempt + 1)
+                print(f"[WARN] WeChat API busy (errcode={errcode}); retrying in {wait}s ...")
+                time.sleep(wait)
+                continue
+            raise
+    raise RuntimeError("token retry loop did not converge")  # pragma: no cover
+
+
+def _yaml_quote(value: str) -> str:
+    """Quote a string for YAML double-quoted style."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _autofill_front_matter(
+    md_path: Path, text: str, cli_title: str | None, author: str
+) -> str:
+    """Prepend a generated front matter block when the article has none.
+
+    Idempotent: any article already starting with a ``---`` block (even an
+    unparseable one) is left untouched. The title comes from the CLI, the
+    first Markdown heading, or the file stem; the date from the file mtime.
+    """
+    if text.lstrip().startswith("---"):
+        return text
+
+    title = cli_title
+    if not title:
+        for line in text.splitlines():
+            heading = re.match(r"^#{1,6}\s+(.+?)\s*$", line)
+            if heading:
+                title = heading.group(1)
+                break
+    if not title:
+        title = md_path.stem
+
+    date = datetime.fromtimestamp(md_path.stat().st_mtime).strftime("%Y-%m-%d")
+    lines = ["---", f"title: {_yaml_quote(title)}", f'date: "{date}"']
+    if author:
+        lines.append(f"author: {_yaml_quote(author)}")
+    lines.append("---")
+    return "\n".join(lines) + "\n\n" + text
 
 
 # ── render command ──────────────────────────────────────────────
@@ -203,10 +287,10 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     # Show credentials status (masked)
     appid, _ = resolve_credentials(pub_cfg, env)
     if appid:
-        print(f"\n=== Credentials ===")
-        print(f"  appid: {appid}")
+        print("\n=== Credentials ===")
+        print(f"  appid: {mask_appid(appid)}")
     else:
-        print(f"\n=== Credentials ===")
+        print("\n=== Credentials ===")
         print("  [WARN] No WECHAT_APPID found in environment")
 
     return 0
@@ -229,13 +313,30 @@ def cmd_draft(args: argparse.Namespace) -> int:
     theme_css = load_theme_css(style_path)
     env = load_env_values(project)
 
-    # Parse front matter
+    cli_values = _resolve_cli_values(args)
+
+    # Optionally generate and write back front matter for articles that
+    # have none (replaces the preprocessing of the retired publish.sh).
+    if getattr(args, "autofill_front_matter", False):
+        raw_text = md_path.read_text(encoding="utf-8")
+        pre_cfg = resolve_config(
+            cli_values=cli_values,
+            front_matter={},
+            publish_config=pub_cfg,
+            env=env,
+        )
+        filled = _autofill_front_matter(
+            md_path, raw_text, args.title, pre_cfg.article.author
+        )
+        if filled != raw_text:
+            md_path.write_text(filled, encoding="utf-8")
+            print(f"[INFO] front matter generated and written back: {md_path}")
+
     text = md_path.read_text(encoding="utf-8")
     front_matter, body = parse_front_matter(text)
     body = body.replace("<!--more-->", "")
 
     # Resolve configuration
-    cli_values = _resolve_cli_values(args)
     config = resolve_config(
         cli_values=cli_values,
         front_matter=front_matter,
@@ -245,27 +346,12 @@ def cmd_draft(args: argparse.Namespace) -> int:
 
     article = config.article
     if not article.title:
-        print("[ERROR] Article title is required. Use --title or add front matter.", file=sys.stderr)
+        print(
+            "[ERROR] Article title is required. Use --title, "
+            "--autofill-front-matter, or add front matter.",
+            file=sys.stderr,
+        )
         return 1
-
-    # AI summary generation (opt-in via --ai-summary)
-    if not article.digest and getattr(args, "ai_summary", False):
-        from .ai_summary import generate_digest, resolve_ai_config
-        ai_url, ai_key, ai_model = resolve_ai_config(dict(pub_cfg), dict(env))
-        if ai_key:
-            print(f"[INFO] generating AI digest via {ai_url} ...")
-            ai_digest = generate_digest(body, ai_url, ai_key, ai_model)
-            if ai_digest:
-                article = ArticleMetadata(
-                    title=article.title,
-                    author=article.author,
-                    digest=ai_digest,
-                    cover=article.cover,
-                    source_url=article.source_url,
-                    need_open_comment=article.need_open_comment,
-                    only_fans_can_comment=article.only_fans_can_comment,
-                )
-                print(f"[INFO] AI digest: {ai_digest}")
 
     # Render Markdown (no styling — raw HTML)
     from .render import render_markdown_to_html, _wrap_preview
@@ -296,8 +382,12 @@ def cmd_draft(args: argparse.Namespace) -> int:
     # Save wechat html
     wechat_path.write_text(wechat_html, encoding="utf-8")
 
-    # Discover images
-    images = discover_images(wechat_html, md_path.parent)
+    # Discover images (markdown dir, project root and build dir are trusted)
+    images = discover_images(
+        wechat_html,
+        md_path.parent,
+        allowed_roots=[md_path.parent, project, build_dir],
+    )
 
     # Ensure state directories
     ensure_state_dirs(config.state_dir)
@@ -312,18 +402,30 @@ def cmd_draft(args: argparse.Namespace) -> int:
         print("[ERROR] WECHAT_APPID and WECHAT_APPSECRET must be set.", file=sys.stderr)
         return 1
 
-    # Dry-run mode
+    # Dry-run mode: everything above is local; nothing below touches the network
     if args.dry_run:
+        digest_note = (
+            "  (AI digest would be generated on a real run)"
+            if getattr(args, "ai_summary", False) and not article.digest
+            else ""
+        )
+        cover_display = str(article.cover)
+        cover_check = (
+            article.cover if article.cover.is_absolute() else project / article.cover
+        )
+        if not cover_check.exists():
+            cover_display += "   [MISSING]"
+
         print("=== DRY RUN ===")
         print(f"  title:    {article.title}")
         print(f"  author:   {article.author}")
-        print(f"  digest:   {article.digest}")
-        print(f"  cover:    {article.cover}")
+        print(f"  digest:   {article.digest or '(empty)'}{digest_note}")
+        print(f"  cover:    {cover_display}")
         print(f"  images:   {len(images)}")
         for img in images:
             print(f"            {img.original_src}")
         print(f"  html size: {len(wechat_html)} chars")
-        print(f"  appid:    {appid}")
+        print(f"  appid:    {mask_appid(appid)}")
 
         sample = DraftArticle(
             title=article.title,
@@ -335,12 +437,34 @@ def cmd_draft(args: argparse.Namespace) -> int:
             need_open_comment=article.need_open_comment,
             only_fans_can_comment=article.only_fans_can_comment,
         )
-        print(f"\n=== Draft payload shape ===")
+        print("\n=== Draft payload shape ===")
         print(json.dumps(build_draft_payload(sample), ensure_ascii=False, indent=2))
         print("\n[DRY RUN] No API calls were made.")
         return 0
 
-    # --- Real execution ---
+    # --- Real execution (network from here on) ---
+
+    # 0. AI digest (opt-in)
+    if not article.digest and getattr(args, "ai_summary", False):
+        from .ai_summary import generate_digest, resolve_ai_config
+        ai_url, ai_key, ai_model = resolve_ai_config(dict(pub_cfg), dict(env))
+        if ai_key:
+            print(f"[INFO] generating AI digest via {ai_url} ...")
+            ai_digest = generate_digest(body, ai_url, ai_key, ai_model)
+            if ai_digest:
+                article = ArticleMetadata(
+                    title=article.title,
+                    author=article.author,
+                    digest=ai_digest,
+                    cover=article.cover,
+                    source_url=article.source_url,
+                    need_open_comment=article.need_open_comment,
+                    only_fans_can_comment=article.only_fans_can_comment,
+                )
+                print(f"[INFO] AI digest: {ai_digest}")
+        else:
+            print("[WARN] --ai-summary requested but no API key found; skipping.")
+
     # 1. Get access token
     token = get_access_token(appid, appsecret, token_cache)
     print(f"[INFO] token: {mask_token(token.value)}")
@@ -381,11 +505,21 @@ def cmd_draft(args: argparse.Namespace) -> int:
         )
         return 1
 
-    cover_result = upload_cover_image(token.value, cover, cover_cache)
+    if getattr(args, "compress_cover", False):
+        cover = compress_cover(cover)
+
+    cover_result = _run_with_token_retry(
+        token, appid, appsecret, token_cache,
+        lambda tv: upload_cover_image(tv, cover, cover_cache),
+    )
 
     # 3. Upload body images and replace src
-    wechat_html = process_images(
-        token.value, wechat_html, images, md_path.parent, image_cache
+    wechat_html = _run_with_token_retry(
+        token, appid, appsecret, token_cache,
+        lambda tv: process_images(
+            tv, wechat_html, images, md_path.parent, image_cache,
+            allow_missing=getattr(args, "allow_missing_images", False),
+        ),
     )
 
     # 4. Create draft
@@ -399,14 +533,16 @@ def cmd_draft(args: argparse.Namespace) -> int:
         need_open_comment=article.need_open_comment,
         only_fans_can_comment=article.only_fans_can_comment,
     )
-    result = add_draft(token.value, draft_article)
+    result = _run_with_token_retry(
+        token, appid, appsecret, token_cache,
+        lambda tv: add_draft(tv, draft_article),
+    )
 
     # 5. Save state
     state = PostState(
         title=article.title,
         source_markdown=md_path,
         wechat_html=wechat_path,
-        mode="draft",
         draft_media_id=result.media_id,
     )
     state_path = save_post_state(posts_dir, state)
@@ -415,7 +551,7 @@ def cmd_draft(args: argparse.Namespace) -> int:
     # 6. Update wechat HTML on disk with final processed version
     wechat_path.write_text(wechat_html, encoding="utf-8")
 
-    print(f"\n[OK] Draft created successfully!")
+    print("\n[OK] Draft created successfully!")
     print(f"  media_id: {result.media_id}")
     print(f"  preview:  {preview_path}")
 
@@ -429,14 +565,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "render":
-        return cmd_render(args)
-    elif args.command == "draft":
-        return cmd_draft(args)
-    elif args.command == "inspect":
-        return cmd_inspect(args)
-    else:
-        parser.print_help()
+    try:
+        if args.command == "render":
+            return cmd_render(args)
+        elif args.command == "draft":
+            return cmd_draft(args)
+        elif args.command == "inspect":
+            return cmd_inspect(args)
+        else:
+            parser.print_help()
+            return 1
+    except WeChatAPIError as e:
+        print(f"[ERROR] WeChat API call failed:\n{e}", file=sys.stderr)
+        return 1
+    except (ValueError, RuntimeError, OSError) as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
         return 1
 
 

@@ -7,9 +7,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests as http_requests
-
 from .errors import check_wechat_response
+from .http import json_response, request_with_retry
 from .state import load_json_mapping, save_json_mapping
 
 API_BASE = "https://api.weixin.qq.com"
@@ -19,6 +18,10 @@ API_BASE = "https://api.weixin.qq.com"
 _ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp"}
 _MAX_BODY_IMAGE_BYTES = 1 * 1024 * 1024  # 1 MB
 _MAX_COVER_BYTES = 10 * 1024 * 1024  # 10 MB
+
+# Remote download guards
+_MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024
+_DOWNLOAD_CHUNK = 64 * 1024
 
 
 @dataclass(frozen=True)
@@ -78,25 +81,52 @@ def _validate_image(path: Path, max_bytes: int) -> None:
         )
 
 
-def _resolve_image_to_file(ref_src: str, resolved_path: Path | None, is_remote: bool) -> Path:
+def _resolve_image_to_file(ref_src: str, resolved_path: Path | None, is_remote: bool) -> tuple[Path, bool]:
     """Resolve an image reference to a local file path.
 
-    Downloads remote images to a temp file.
+    Downloads remote images to a temp file. Returns (path, is_temp); the
+    caller must delete the file when ``is_temp`` is True.
     """
-    if not is_remote and resolved_path is not None:
+    if not is_remote:
+        if resolved_path is None:
+            raise FileNotFoundError(
+                f"Image path is outside the allowed directories "
+                f"(markdown directory and build directory): {ref_src}"
+            )
         if resolved_path.exists():
-            return resolved_path
+            return resolved_path, False
         raise FileNotFoundError(f"Local image not found: {resolved_path}")
 
-    # Remote image: download
-    resp = http_requests.get(ref_src, timeout=60)
+    # Remote image: stream-download with a hard size cap
+    resp = request_with_retry(
+        "GET", ref_src, operation="download_image", timeout=60, stream=True
+    )
     resp.raise_for_status()
+    content_type = resp.headers.get("Content-Type", "")
+    if content_type and not content_type.lower().startswith("image/"):
+        raise ValueError(
+            f"Remote image URL returned non-image Content-Type "
+            f"'{content_type}': {ref_src}"
+        )
 
     suffix = _url_to_suffix(ref_src)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    tmp.write(resp.content)
-    tmp.close()
-    return Path(tmp.name)
+    try:
+        downloaded = 0
+        for chunk in resp.iter_content(chunk_size=_DOWNLOAD_CHUNK):
+            downloaded += len(chunk)
+            if downloaded > _MAX_DOWNLOAD_BYTES:
+                raise ValueError(
+                    f"Remote image exceeds {_MAX_DOWNLOAD_BYTES // (1024 * 1024)} MB "
+                    f"download limit: {ref_src}"
+                )
+            tmp.write(chunk)
+        tmp.close()
+        return Path(tmp.name), True
+    except Exception:
+        tmp.close()
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
 
 
 def _url_to_suffix(url: str) -> str:
@@ -109,6 +139,63 @@ def _url_to_suffix(url: str) -> str:
         if ext in _ALLOWED_EXTENSIONS:
             return ext
     return ".png"
+
+
+def _post_multipart(
+    operation: str,
+    url: str,
+    file_field: dict,
+) -> dict:
+    """POST a multipart file upload to a WeChat endpoint and parse the reply."""
+    resp = request_with_retry("POST", url, operation=operation, files=file_field, timeout=60)
+    data = json_response(resp, operation)
+    check_wechat_response(operation, data)
+    return data
+
+
+def compress_cover(
+    path: Path,
+    max_bytes: int = _MAX_BODY_IMAGE_BYTES,
+    max_width: int = 900,
+) -> Path:
+    """Re-encode an oversized cover image to shrink it before upload.
+
+    Writes a JPEG copy (quality ladder, aspect ratio kept, capped to
+    *max_width*) when the file exceeds *max_bytes*. Requires the optional
+    Pillow dependency; returns the original path unchanged when Pillow is
+    missing or the image already fits.
+    """
+    if path.stat().st_size <= max_bytes:
+        return path
+    try:
+        from PIL import Image
+    except ImportError:
+        print(
+            "[WARN] Pillow is not installed; cover left uncompressed "
+            "(pip install Pillow, or install this package with the "
+            "'cover-compress' extra)."
+        )
+        return path
+
+    img = Image.open(path)
+    if img.width > max_width:
+        ratio = max_width / img.width
+        img = img.resize(
+            (max_width, max(1, round(img.height * ratio))), Image.LANCZOS
+        )
+    img = img.convert("RGB")
+
+    out = path.with_name(f"{path.stem}.compressed.jpg")
+    for quality in (85, 70, 55, 40):
+        img.save(out, "JPEG", quality=quality)
+        if out.stat().st_size <= max_bytes:
+            break
+    print(
+        f"[INFO] cover compressed: {path.name} "
+        f"({path.stat().st_size / 1024:.0f} KB -> {out.stat().st_size / 1024:.0f} KB) "
+        f"-> {out.name}"
+    )
+    return out
 
 
 def upload_cover_image(
@@ -136,9 +223,7 @@ def upload_cover_image(
 
     url = f"{API_BASE}/cgi-bin/material/add_material?access_token={access_token}&type=image"
     with open(path, "rb") as f:
-        resp = http_requests.post(url, files={"media": f}, timeout=60)
-    data = resp.json()
-    check_wechat_response("upload_cover_image", data)
+        data = _post_multipart("upload_cover_image", url, {"media": f})
 
     result = UploadedCover(media_id=data["media_id"], url=data.get("url"))
     print(f"[INFO] uploaded cover: {path.name} -> media_id={result.media_id[:6]}...")
@@ -174,9 +259,7 @@ def upload_body_image(
 
     url = f"{API_BASE}/cgi-bin/media/uploadimg?access_token={access_token}"
     with open(path, "rb") as f:
-        resp = http_requests.post(url, files={"media": f}, timeout=60)
-    data = resp.json()
-    check_wechat_response("upload_body_image", data)
+        data = _post_multipart("upload_body_image", url, {"media": f})
 
     result = UploadedBodyImage(url=data["url"])
     print(f"[INFO] uploaded image: {path.name} -> {result.url[:40]}...")
@@ -196,8 +279,13 @@ def process_images(
     image_refs: list,  # list[ImageReference]
     base_dir: Path,
     cache_path: Path | None = None,
+    allow_missing: bool = False,
 ) -> str:
     """Upload all body images and replace src in HTML with WeChat URLs.
+
+    By default any failed upload aborts the run (raising RuntimeError) so a
+    draft never ships with broken local image paths. With
+    ``allow_missing=True`` failures only warn and the original src is kept.
 
     Returns modified HTML with all image src replaced.
     """
@@ -209,16 +297,34 @@ def process_images(
 
     soup = BeautifulSoup(html, "html.parser")
     src_map: dict[str, str] = {}  # original_src -> wechat_url
+    failures: list[str] = []
 
     for ref in image_refs:
+        tmp_file: Path | None = None
         try:
-            local_path = _resolve_image_to_file(ref.original_src, ref.resolved_path, ref.is_remote)
+            local_path, is_temp = _resolve_image_to_file(
+                ref.original_src, ref.resolved_path, ref.is_remote
+            )
+            if is_temp:
+                tmp_file = local_path
             result = upload_body_image(access_token, local_path, cache_path)
             src_map[ref.original_src] = result.url
         except Exception as e:
+            failures.append(f"{ref.original_src}: {e}")
+            if not allow_missing:
+                raise RuntimeError(
+                    f"Failed to upload image {ref.original_src}: {e}\n"
+                    f"Fix the image (or pass --allow-missing-images to skip it)."
+                ) from e
             print(f"[WARN] failed to upload image {ref.original_src}: {e}")
-            # Keep original src on failure
-            continue
+        finally:
+            if tmp_file is not None:
+                tmp_file.unlink(missing_ok=True)
+
+    if failures:
+        print(f"[WARN] {len(failures)} image(s) could not be uploaded:")
+        for failure in failures:
+            print(f"       {failure}")
 
     # Replace src attributes
     for img in soup.find_all("img"):

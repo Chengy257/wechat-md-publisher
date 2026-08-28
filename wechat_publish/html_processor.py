@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Sequence
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, Tag
@@ -251,11 +250,20 @@ def convert_links_to_footnotes(html: str) -> str:
     return str(soup)
 
 
-def discover_images(html: str, base_dir: Path) -> list[ImageReference]:
+def discover_images(
+    html: str,
+    base_dir: Path,
+    allowed_roots: Sequence[Path] | None = None,
+) -> list[ImageReference]:
     """Discover image references from an HTML fragment.
 
     Returns a list of ImageReference objects with resolved paths.
     Skips images inside <pre> and <code> blocks.
+
+    Local image paths must resolve inside one of *allowed_roots* (by default
+    the *base_dir*). A path escaping every root yields a reference with
+    ``resolved_path=None`` so the upload step fails loudly instead of
+    shipping arbitrary local files into the WeChat material library.
     """
     soup = BeautifulSoup(html, "html.parser")
 
@@ -263,6 +271,8 @@ def discover_images(html: str, base_dir: Path) -> list[ImageReference]:
     for parent_tag in soup.find_all(["pre", "code"]):
         for img in parent_tag.find_all("img"):
             code_imgs.add(id(img))
+
+    roots = [Path(root).resolve() for root in (allowed_roots or [base_dir])]
 
     refs: list[ImageReference] = []
     seen_srcs: set[str] = set()
@@ -280,10 +290,17 @@ def discover_images(html: str, base_dir: Path) -> list[ImageReference]:
         resolved: Path | None = None
 
         if not is_remote:
-            if src.startswith("/"):
-                resolved = Path(src)
+            candidate = Path(src)
+            if not candidate.is_absolute():
+                candidate = base_dir / src
+            candidate = candidate.resolve()
+            if any(candidate.is_relative_to(root) for root in roots):
+                resolved = candidate
             else:
-                resolved = (base_dir / src).resolve()
+                print(
+                    f"[WARN] image path escapes allowed directories, "
+                    f"it will not be uploaded: {src}"
+                )
 
         refs.append(
             ImageReference(

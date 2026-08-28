@@ -149,11 +149,12 @@ def render_article(
 
     raw_html = render_markdown_to_html(body)
 
-    # Apply full processing pipeline if theme CSS provided
+    # Sanitize and adapt for WeChat always; CSS inlining only when a theme
+    # is loaded (an empty stylesheet must never skip the safety pipeline).
+    raw_html = sanitize_html_fragment(raw_html)
+    raw_html = make_wechat_compatible(raw_html)
+    raw_html = convert_links_to_footnotes(raw_html)
     if theme_css:
-        raw_html = sanitize_html_fragment(raw_html)
-        raw_html = make_wechat_compatible(raw_html)
-        raw_html = convert_links_to_footnotes(raw_html)
         raw_html = inline_css(raw_html, theme_css)
 
     # Build output paths

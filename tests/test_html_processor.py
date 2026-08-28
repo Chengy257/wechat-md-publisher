@@ -167,11 +167,35 @@ class TestDiscoverImages:
         refs = discover_images(html, Path("/base"))
         assert len(refs) == 1
 
-    def test_absolute_local_path(self):
-        html = '<img src="/assets/fig.png">'
-        refs = discover_images(html, Path("/base"))
+    def test_absolute_path_inside_base_is_allowed(self, tmp_path: Path):
+        target = tmp_path / "assets" / "fig.png"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"\x89PNG")
+        html = f'<img src="{target.as_posix()}">'
+        refs = discover_images(html, tmp_path)
         assert len(refs) == 1
-        assert refs[0].resolved_path == Path("/assets/fig.png")
+        assert refs[0].resolved_path == target.resolve()
+
+    def test_absolute_path_outside_base_is_rejected(self, tmp_path: Path):
+        html = '<img src="/etc/secret.png">'
+        refs = discover_images(html, tmp_path)
+        assert refs[0].resolved_path is None
+
+    def test_relative_path_escaping_base_is_rejected(self, tmp_path: Path):
+        html = '<img src="../outside.png">'
+        refs = discover_images(html, tmp_path)
+        assert refs[0].resolved_path is None
+
+    def test_allowed_roots_include_build_dir(self, tmp_path: Path):
+        build_mermaid = tmp_path / "build" / "mermaid" / "mermaid_0.png"
+        build_mermaid.parent.mkdir(parents=True)
+        build_mermaid.write_bytes(b"\x89PNG")
+        html = '<img src="../build/mermaid/mermaid_0.png">'
+        refs = discover_images(
+            html, tmp_path / "input",
+            allowed_roots=[tmp_path / "input", tmp_path / "build"],
+        )
+        assert refs[0].resolved_path == build_mermaid.resolve()
 
 
 # ── WeChat compatibility transforms ────────────────────────────

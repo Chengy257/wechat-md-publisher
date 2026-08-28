@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -51,7 +52,7 @@ _ERRCODE_HINTS: dict[int, str] = {
     40003: "AppID 不合法，请检查 WECHAT_APPID 环境变量。",
     40004: "媒体类型不合法。",
     40007: "invalid media_id：请确认 thumb_media_id 来自永久素材上传（material/add_material），而非正文图片接口（media/uploadimg）。",
-    40009: "图片尺寸或格式不合法，建议使用 jpg/png 且不超过 1 MB。",
+    40009: "图片尺寸或格式不合法：封面（material/add_material）支持 10MB 内图片，正文图（media/uploadimg）需小于 1MB。",
     41001: "缺少 access_token 参数。",
     42001: "access_token 已过期，请刷新 token 缓存。",
     43002: "需要 POST 请求。",
@@ -64,11 +65,9 @@ _ERRCODE_HINTS: dict[int, str] = {
 
 _OPERATION_HINTS: dict[str, str] = {
     "get_access_token": "检查 AppID、AppSecret 是否正确，IP 是否在白名单。",
-    "upload_cover_image": "检查图片路径、格式（jpg/png）和大小（<1MB）。",
+    "upload_cover_image": "检查图片路径、格式（jpg/png）和大小（封面 ≤10MB）。",
     "upload_body_image": "检查图片路径、格式（jpg/png）和大小（<1MB）。",
     "add_draft": "检查 title、content、thumb_media_id 是否有效。",
-    "submit_publish": "检查 media_id 是否为有效草稿 ID。",
-    "get_publish_status": "检查 publish_id 是否有效。",
 }
 
 
@@ -82,10 +81,11 @@ def hint_for_error(operation: str, errcode: int | None, errmsg: str | None) -> s
     if operation in _OPERATION_HINTS:
         parts.append(_OPERATION_HINTS[operation])
 
-    if "invalid ip" in (errmsg or "").lower() or "ip" in (errmsg or "").lower():
+    errmsg_lower = (errmsg or "").lower()
+    if re.search(r"\bip\b", errmsg_lower):
         parts.append("请在公众号后台 → 设置与开发 → 基本配置中添加本机 IP 到白名单。")
 
-    if "access_token" in (errmsg or "").lower() and errcode not in (40001, 42001):
+    if "access_token" in errmsg_lower and errcode not in (40001, 42001):
         parts.append("尝试删除 .wechat_publish/token.json 后重试。")
 
     if not parts:

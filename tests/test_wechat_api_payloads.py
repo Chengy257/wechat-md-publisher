@@ -225,14 +225,12 @@ class TestStatePersistence:
             title="Test Article",
             source_markdown=Path("input/test.md"),
             wechat_html=Path("build/test.wechat.html"),
-            mode="draft",
             draft_media_id="MEDIA_123",
         )
         path = save_post_state(posts_dir, state)
         assert path.exists()
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["title"] == "Test Article"
-        assert data["mode"] == "draft"
         assert data["draft_media_id"] == "MEDIA_123"
 
     def test_save_post_state_no_media_id(self, tmp_path: Path):
@@ -241,7 +239,6 @@ class TestStatePersistence:
             title="Draft Only",
             source_markdown=Path("input/test.md"),
             wechat_html=Path("build/test.html"),
-            mode="draft",
         )
         path = save_post_state(posts_dir, state)
         data = json.loads(path.read_text(encoding="utf-8"))
