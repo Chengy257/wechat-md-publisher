@@ -1,10 +1,8 @@
 # Copy this file to config/publish.yaml and adjust local defaults.
 
 default_author: "Cy257"
-default_mode: "draft"
 
 article:
-  markdown: "input/article.md"
   cover: "input/cover.png"
   source_url: ""
   need_open_comment: 1
@@ -28,11 +26,6 @@ wechat:
   author_env:
     - "WECHAT_DEFAULT_AUTHOR"
     - "WECHAT_AUTHOR"
-
-safety:
-  dry_run_default: false
-  allow_publish: false
-  mask_token_chars: 6
 
 ai:
   summary_api_url: ""          # OpenAI-compatible endpoint (default: https://api.deepseek.com/v1)

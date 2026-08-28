@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Sequence
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, Tag
@@ -44,6 +44,21 @@ def _strip_unsupported_css(style_str: str) -> str:
         if prop not in _UNSUPPORTED_CSS_PROPS:
             kept.append(decl)
     return "; ".join(kept)
+
+
+def process_article_html(html: str, theme_css: str = "") -> str:
+    """Run the full WeChat HTML processing pipeline (single entry point).
+
+    sanitize → WeChat compatibility → link footnotes → CSS inline. The
+    safety steps always run; CSS inlining is skipped only when no theme
+    stylesheet is provided.
+    """
+    html = sanitize_html_fragment(html)
+    html = make_wechat_compatible(html)
+    html = convert_links_to_footnotes(html)
+    if theme_css:
+        html = inline_css(html, theme_css)
+    return html
 
 
 def sanitize_html_fragment(html: str) -> str:

@@ -185,7 +185,7 @@ class TestResolveStylePath:
     def test_theme_loads_builtin(self):
         result = resolve_style_path(style_arg=None, theme_arg="default", project_dir=Path("/tmp"))
         assert result.name == "default.css"
-        assert "styles" in str(result)
+        assert "themes" in str(result)
 
     def test_theme_elegant(self):
         result = resolve_style_path(style_arg=None, theme_arg="elegant", project_dir=Path("/tmp"))
@@ -199,10 +199,14 @@ class TestResolveStylePath:
         result = resolve_style_path(style_arg=None, theme_arg="tech", project_dir=Path("/tmp"))
         assert result.name == "tech.css"
 
-    def test_unknown_theme_falls_back(self, tmp_path: Path):
+    def test_project_style_css_wins_over_builtin(self, tmp_path: Path):
+        project_style = tmp_path / "config" / "style.css"
+        project_style.parent.mkdir(parents=True)
+        project_style.write_text("h1 { color: red; }")
         result = resolve_style_path(style_arg=None, theme_arg=None, project_dir=tmp_path)
-        assert result == tmp_path / "config" / "style.css"
+        assert result == project_style
 
-    def test_none_args_fall_back(self, tmp_path: Path):
+    def test_no_theme_no_project_style_uses_bundled_default(self, tmp_path: Path):
         result = resolve_style_path(style_arg=None, theme_arg=None, project_dir=tmp_path)
-        assert result == tmp_path / "config" / "style.css"
+        assert result.name == "default.css"
+        assert "themes" in str(result)

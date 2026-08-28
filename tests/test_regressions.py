@@ -41,19 +41,16 @@ def cli_env(monkeypatch):
 
 
 class TestFrontMatterNotInDraftBody:
-    def test_yaml_stays_out_of_rendered_body(
-        self, tmp_path: Path, monkeypatch, cli_env, capsys
-    ):
-        monkeypatch.chdir(tmp_path)
+    def test_yaml_stays_out_of_rendered_body(self, tmp_project: Path, capsys):
         _write_article(
-            tmp_path / "input" / "article.md",
+            tmp_project / "input" / "article.md",
             'title: "测试文章"\nauthor: "Cy257"\n',
             "# Hello\n\nParagraph text.\n",
         )
         rc = main(["draft", "--md", "input/article.md", "--dry-run"])
         assert rc == 0
 
-        wechat_html = (tmp_path / "build" / "article.wechat.html").read_text(
+        wechat_html = (tmp_project / "build" / "article.wechat.html").read_text(
             encoding="utf-8"
         )
         assert "title:" not in wechat_html
@@ -62,11 +59,10 @@ class TestFrontMatterNotInDraftBody:
         assert "Hello" in wechat_html
 
     def test_first_line_kept_when_body_contains_horizontal_rule(
-        self, tmp_path: Path, monkeypatch, cli_env
+        self, tmp_project: Path
     ):
-        monkeypatch.chdir(tmp_path)
         _write_article(
-            tmp_path / "input" / "article.md",
+            tmp_project / "input" / "article.md",
             "",
             "First line stays.\n\n---\n\nAfter the rule.\n",
         )
@@ -75,25 +71,22 @@ class TestFrontMatterNotInDraftBody:
         )
         assert rc == 0
 
-        wechat_html = (tmp_path / "build" / "article.wechat.html").read_text(
+        wechat_html = (tmp_project / "build" / "article.wechat.html").read_text(
             encoding="utf-8"
         )
         assert "First line stays." in wechat_html
         assert "After the rule." in wechat_html
 
-    def test_more_marker_removed(
-        self, tmp_path: Path, monkeypatch, cli_env
-    ):
-        monkeypatch.chdir(tmp_path)
+    def test_more_marker_removed(self, tmp_project: Path):
         _write_article(
-            tmp_path / "input" / "article.md",
+            tmp_project / "input" / "article.md",
             'title: "T"\n',
             "Intro.\n\n<!--more-->\n\nRest.\n",
         )
         rc = main(["draft", "--md", "input/article.md", "--dry-run"])
         assert rc == 0
 
-        wechat_html = (tmp_path / "build" / "article.wechat.html").read_text(
+        wechat_html = (tmp_project / "build" / "article.wechat.html").read_text(
             encoding="utf-8"
         )
         assert "<!--more-->" not in wechat_html
@@ -151,22 +144,19 @@ class TestMermaidSrcRelative:
     def test_src_resolves_relative_to_markdown_dir(
         self, mock_render, tmp_path: Path
     ):
-        from wechat_publish.mermaid import replace_mermaid_blocks
+        from wechat_publish.mermaid import _diagram_filename, replace_mermaid_blocks
 
         build_mermaid = tmp_path / "build" / "mermaid"
         md_dir = tmp_path / "input"
-        img_path = build_mermaid / "mermaid_0.png"
-        mock_render.return_value = img_path
-        img_path.parent.mkdir(parents=True)
-        img_path.write_bytes(b"\x89PNG")
+        img_path = build_mermaid / _diagram_filename("graph TD\n  A-->B")
+        mock_render.side_effect = lambda src, path: path.write_bytes(b"\x89PNG")
 
         html = '<pre><code class="language-mermaid">graph TD\n  A--&gt;B</code></pre>'
         result = replace_mermaid_blocks(
             html, build_mermaid, engine="mmdc", src_base_dir=md_dir
         )
 
-        assert 'src="../build/mermaid/mermaid_0.png"' in result
-        src = "../build/mermaid/mermaid_0.png"
+        src = result.split('src="')[1].split('"')[0]
         assert (md_dir / src).resolve() == img_path.resolve()
 
 
@@ -194,25 +184,7 @@ class TestImageSizeLimits:
 # ── cover failure chain ─────────────────────────────────────────
 
 class TestCoverFailureChain:
-    def _prepare(self, tmp_path: Path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        _write_article(
-            tmp_path / "input" / "article.md",
-            'title: "T"\n',
-            "Body.\n",
-        )
-        # Skip the real token request; the cover check happens after it.
-        patcher = patch("wechat_publish.cli.get_access_token")
-        mock_token = patcher.start()
-        from wechat_publish.token import AccessToken
-        mock_token.return_value = AccessToken(value="t" * 64, expires_at=2**31)
-        yield
-
-    def test_missing_cover_aborts_cleanly(
-        self, tmp_path: Path, monkeypatch, cli_env, capsys
-    ):
-        monkeypatch.chdir(tmp_path)
-        _write_article(tmp_path / "input" / "article.md", 'title: "T"\n', "Body.\n")
+    def test_missing_cover_aborts_cleanly(self, tmp_project: Path, capsys):
         with patch("wechat_publish.cli.get_access_token") as mock_token:
             from wechat_publish.token import AccessToken
             mock_token.return_value = AccessToken(value="t" * 64, expires_at=2**31)
@@ -223,11 +195,9 @@ class TestCoverFailureChain:
         assert "Cover image not found" in err
 
     def test_ai_cover_generation_failure_aborts(
-        self, tmp_path: Path, monkeypatch, cli_env, capsys
+        self, tmp_project: Path, monkeypatch, capsys
     ):
-        monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("GEMINI_API_KEY", "fake_key")
-        _write_article(tmp_path / "input" / "article.md", 'title: "T"\n', "Body.\n")
         with patch("wechat_publish.cli.get_access_token") as mock_token, patch(
             "wechat_publish.ai_cover.generate_cover_image",
             side_effect=RuntimeError("boom"),
@@ -240,12 +210,8 @@ class TestCoverFailureChain:
         err = capsys.readouterr().err
         assert "AI cover generation failed" in err
 
-    def test_ai_cover_without_key_aborts(
-        self, tmp_path: Path, monkeypatch, cli_env, capsys
-    ):
-        monkeypatch.chdir(tmp_path)
+    def test_ai_cover_without_key_aborts(self, tmp_project: Path, monkeypatch, capsys):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        _write_article(tmp_path / "input" / "article.md", 'title: "T"\n', "Body.\n")
         with patch("wechat_publish.cli.get_access_token") as mock_token:
             from wechat_publish.token import AccessToken
             mock_token.return_value = AccessToken(value="t" * 64, expires_at=2**31)

@@ -172,13 +172,9 @@ class TestAutofillFrontMatter:
         assert 'title: "Weird \\"quoted\\" title"' in result
 
     def test_end_to_end_writes_file_and_dry_run_succeeds(
-        self, tmp_path: Path, monkeypatch
+        self, tmp_project: Path
     ):
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("WECHAT_APPID", "wx_test_appid")
-        monkeypatch.setenv("WECHAT_APPSECRET", "test_secret")
-        md = tmp_path / "input" / "article.md"
-        md.parent.mkdir(parents=True)
+        md = tmp_project / "input" / "article.md"
         md.write_text("# Generated Title\n\nSome body text.\n", encoding="utf-8")
 
         rc = main(
@@ -290,17 +286,8 @@ class TestAtomicWrites:
 
 class TestDryRunNoNetwork:
     def test_dry_run_with_ai_flags_makes_no_requests(
-        self, tmp_path: Path, monkeypatch
+        self, tmp_project: Path, monkeypatch
     ):
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("WECHAT_APPID", "wx_test_appid")
-        monkeypatch.setenv("WECHAT_APPSECRET", "test_secret")
-        md = tmp_path / "input" / "article.md"
-        md.parent.mkdir(parents=True)
-        md.write_text(
-            '---\ntitle: "T"\n---\n\nBody.\n', encoding="utf-8"
-        )
-
         def _no_network(*a, **kw):
             raise AssertionError("network call attempted during dry-run")
 

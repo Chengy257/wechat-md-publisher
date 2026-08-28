@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -31,11 +32,10 @@ class PublisherConfig:
     article: ArticleMetadata
     build_dir: Path
     state_dir: Path
-    mode: str = "draft"
-    token_cache: Path | None = None
-    image_cache: Path | None = None
-    cover_cache: Path | None = None
-    posts_dir: Path | None = None
+    token_cache: Path
+    image_cache: Path
+    cover_cache: Path
+    posts_dir: Path
 
 
 # Environment variable name alternatives
@@ -92,6 +92,14 @@ def load_theme_css(path: Path) -> str:
 
 BUILTIN_THEMES = {"default", "elegant", "lapis", "simple", "tech"}
 
+_THEMES_DIR = Path(__file__).resolve().parent / "themes"
+
+
+def _builtin_theme_path(name: str) -> Path | None:
+    """Return a bundled theme CSS path, or None when not shipped."""
+    candidate = _THEMES_DIR / f"{name}.css"
+    return candidate if candidate.exists() else None
+
 
 def resolve_style_path(
     *,
@@ -101,15 +109,22 @@ def resolve_style_path(
 ) -> Path:
     """Resolve the CSS theme path from CLI args.
 
-    Priority: --style > --theme > project config/style.css
+    Priority: --style > --theme > project config/style.css > bundled
+    default.css (so a default run always gets styled, sanitized output).
     """
     if style_arg is not None:
         return style_arg
     if theme_arg and theme_arg in BUILTIN_THEMES:
-        builtin = Path(__file__).resolve().parent.parent / "config" / "styles" / f"{theme_arg}.css"
-        if builtin.exists():
+        builtin = _builtin_theme_path(theme_arg)
+        if builtin is not None:
             return builtin
-    return project_dir / "config" / "style.css"
+    project_style = project_dir / "config" / "style.css"
+    if project_style.exists():
+        return project_style
+    builtin_default = _builtin_theme_path("default")
+    if builtin_default is not None:
+        return builtin_default
+    return project_style
 
 
 def load_publish_config(path: Path) -> Mapping[str, Any]:
@@ -125,14 +140,30 @@ def load_publish_config(path: Path) -> Mapping[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+_KNOWN_CONFIG_KEYS = {"default_author", "article", "paths", "wechat", "ai"}
+
+
 def resolve_config(
     *,
     cli_values: Mapping[str, Any],
     front_matter: Mapping[str, Any],
     publish_config: Mapping[str, Any],
     env: Mapping[str, str | None],
+    project_dir: Path | None = None,
 ) -> PublisherConfig:
-    """Resolve config using CLI > front matter > YAML config > environment defaults."""
+    """Resolve config using CLI > front matter > YAML config > environment defaults.
+
+    When *project_dir* is given, all relative output paths are anchored to it
+    (otherwise they stay relative to the process working directory).
+    """
+    unknown = set(publish_config) - _KNOWN_CONFIG_KEYS
+    if unknown:
+        print(
+            f"[WARN] publish config: ignoring unknown key(s): "
+            f"{', '.join(sorted(unknown))}",
+            file=sys.stderr,
+        )
+
     article_cfg = publish_config.get("article", {})
     paths_cfg = publish_config.get("paths", {})
     wechat_cfg = publish_config.get("wechat", {})
@@ -185,21 +216,17 @@ def resolve_config(
         )
     )
 
-    # Paths
-    build_dir = Path(paths_cfg.get("build_dir", "build"))
-    state_dir = Path(paths_cfg.get("state_dir", ".wechat_publish"))
-    token_cache = Path(paths_cfg["token_cache"]) if "token_cache" in paths_cfg else None
-    image_cache = Path(paths_cfg["image_cache"]) if "image_cache" in paths_cfg else None
-    cover_cache = Path(paths_cfg["cover_cache"]) if "cover_cache" in paths_cfg else None
-    posts_dir = Path(paths_cfg["posts_dir"]) if "posts_dir" in paths_cfg else None
+    # Paths: optionally anchored to the project directory
+    def _anchor(rel_path: str | Path) -> Path:
+        path = Path(rel_path)
+        return project_dir / path if project_dir is not None and not path.is_absolute() else path
 
-    # Mode
-    mode = (
-        cli_values.get("mode")
-        or front_matter.get("mode")
-        or publish_config.get("default_mode")
-        or "draft"
-    )
+    build_dir = _anchor(paths_cfg.get("build_dir", "build"))
+    state_dir = _anchor(paths_cfg.get("state_dir", ".wechat_publish"))
+    token_cache = _anchor(paths_cfg["token_cache"]) if "token_cache" in paths_cfg else state_dir / "token.json"
+    image_cache = _anchor(paths_cfg["image_cache"]) if "image_cache" in paths_cfg else state_dir / "image_cache.json"
+    cover_cache = _anchor(paths_cfg["cover_cache"]) if "cover_cache" in paths_cfg else state_dir / "cover_cache.json"
+    posts_dir = _anchor(paths_cfg["posts_dir"]) if "posts_dir" in paths_cfg else state_dir / "posts"
 
     article = ArticleMetadata(
         title=title,
@@ -215,7 +242,6 @@ def resolve_config(
         article=article,
         build_dir=build_dir,
         state_dir=state_dir,
-        mode=mode,
         token_cache=token_cache,
         image_cache=image_cache,
         cover_cache=cover_cache,

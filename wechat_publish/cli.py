@@ -7,9 +7,10 @@ import json
 import re
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Sequence, TypeVar
+from typing import Any, Callable, Mapping, Sequence, TypeVar
 
 from .config import (
     ArticleMetadata,
@@ -24,19 +25,17 @@ from .config import (
 )
 from .draft import DraftArticle, add_draft, build_draft_payload
 from .errors import WeChatAPIError
-from .html_processor import (
-    convert_links_to_footnotes,
-    discover_images,
-    inline_css,
-    make_wechat_compatible,
-    sanitize_html_fragment,
-)
+from .html_processor import discover_images, process_article_html
 from .images import compress_cover, process_images, upload_cover_image
-from .render import parse_front_matter, render_article
+from .render import _wrap_preview, parse_front_matter, render_article, render_markdown_to_html
 from .state import PostState, ensure_state_dirs, save_post_state
 from .token import get_access_token, mask_appid, mask_token
 
 _T = TypeVar("_T")
+
+
+class _Abort(RuntimeError):
+    """Internal: abort the current command with a user-facing message."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -125,15 +124,6 @@ def _resolve_cli_values(args: argparse.Namespace) -> dict[str, Any]:
         if val is not None:
             values[key] = str(val)
     return values
-
-
-def _process_html(html: str, theme_css: str) -> str:
-    """Run the full HTML processing pipeline: sanitize → compat → footnotes → CSS inline."""
-    html = sanitize_html_fragment(html)
-    html = make_wechat_compatible(html)
-    html = convert_links_to_footnotes(html)
-    html = inline_css(html, theme_css)
-    return html
 
 
 def _run_with_token_retry(
@@ -270,13 +260,11 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     print(f"  author:   {article.author or '(empty)'}")
     print(f"  digest:   {article.digest or '(empty)'}")
     print(f"  cover:    {article.cover}")
-    print(f"  mode:     {config.mode}")
 
     # Render to discover images
     _, body = parse_front_matter(text)
-    from .render import render_markdown_to_html
     raw_html = render_markdown_to_html(body)
-    processed = _process_html(raw_html, theme_css)
+    processed = process_article_html(raw_html, theme_css)
 
     images = discover_images(processed, md_path.parent)
     print(f"\n=== Images ({len(images)}) ===")
@@ -298,12 +286,28 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 
 # ── draft command ───────────────────────────────────────────────
 
-def cmd_draft(args: argparse.Namespace) -> int:
-    """Create a WeChat draft from a Markdown article."""
+@dataclass(frozen=True)
+class _DraftStage:
+    """Result of the local (network-free) draft rendering stage."""
+
+    config: PublisherConfig
+    article: ArticleMetadata
+    wechat_html: str
+    body: str
+    images: list
+    md_path: Path
+    project: Path
+    preview_path: Path
+    wechat_path: Path
+    pub_cfg: Mapping[str, Any]
+    env: Mapping[str, str | None]
+
+
+def _render_stage(args: argparse.Namespace) -> _DraftStage:
+    """Load, render and adapt the article locally; no network is touched."""
     md_path = args.md
     if not md_path.exists():
-        print(f"[ERROR] Markdown file not found: {md_path}", file=sys.stderr)
-        return 1
+        raise _Abort(f"Markdown file not found: {md_path}")
 
     project = _project_dir()
     pub_cfg = load_publish_config(project / args.config)
@@ -312,7 +316,6 @@ def cmd_draft(args: argparse.Namespace) -> int:
     )
     theme_css = load_theme_css(style_path)
     env = load_env_values(project)
-
     cli_values = _resolve_cli_values(args)
 
     # Optionally generate and write back front matter for articles that
@@ -336,25 +339,21 @@ def cmd_draft(args: argparse.Namespace) -> int:
     front_matter, body = parse_front_matter(text)
     body = body.replace("<!--more-->", "")
 
-    # Resolve configuration
     config = resolve_config(
         cli_values=cli_values,
         front_matter=front_matter,
         publish_config=pub_cfg,
         env=env,
+        project_dir=project,
     )
 
     article = config.article
     if not article.title:
-        print(
-            "[ERROR] Article title is required. Use --title, "
-            "--autofill-front-matter, or add front matter.",
-            file=sys.stderr,
+        raise _Abort(
+            "Article title is required. Use --title, "
+            "--autofill-front-matter, or add front matter."
         )
-        return 1
 
-    # Render Markdown (no styling — raw HTML)
-    from .render import render_markdown_to_html, _wrap_preview
     raw_html = render_markdown_to_html(body)
     build_dir = config.build_dir
     build_dir.mkdir(parents=True, exist_ok=True)
@@ -362,10 +361,8 @@ def cmd_draft(args: argparse.Namespace) -> int:
     preview_path = build_dir / "article.preview.html"
     wechat_path = build_dir / "article.wechat.html"
 
-    # Process HTML
-    wechat_html = _process_html(raw_html, theme_css)
+    wechat_html = process_article_html(raw_html, theme_css)
 
-    # Render mermaid diagrams if requested
     if getattr(args, "mermaid", False):
         from .mermaid import replace_mermaid_blocks
         mermaid_dir = build_dir / "mermaid"
@@ -374,12 +371,9 @@ def cmd_draft(args: argparse.Namespace) -> int:
             src_base_dir=md_path.parent,
         )
 
-    # Save preview
+    # Save preview and WeChat HTML
     title = str(front_matter.get("title", ""))
-    preview_html = _wrap_preview(wechat_html, title)
-    preview_path.write_text(preview_html, encoding="utf-8")
-
-    # Save wechat html
+    preview_path.write_text(_wrap_preview(wechat_html, title), encoding="utf-8")
     wechat_path.write_text(wechat_html, encoding="utf-8")
 
     # Discover images (markdown dir, project root and build dir are trusted)
@@ -389,140 +383,158 @@ def cmd_draft(args: argparse.Namespace) -> int:
         allowed_roots=[md_path.parent, project, build_dir],
     )
 
-    # Ensure state directories
-    ensure_state_dirs(config.state_dir)
-    token_cache = config.token_cache or config.state_dir / "token.json"
-    image_cache = config.image_cache or config.state_dir / "image_cache.json"
-    cover_cache = config.cover_cache or config.state_dir / "cover_cache.json"
-    posts_dir = config.posts_dir or config.state_dir / "posts"
+    return _DraftStage(
+        config=config,
+        article=article,
+        wechat_html=wechat_html,
+        body=body,
+        images=images,
+        md_path=md_path,
+        project=project,
+        preview_path=preview_path,
+        wechat_path=wechat_path,
+        pub_cfg=pub_cfg,
+        env=env,
+    )
 
-    # Resolve credentials
-    appid, appsecret = resolve_credentials(pub_cfg, env)
-    if not appid or not appsecret:
-        print("[ERROR] WECHAT_APPID and WECHAT_APPSECRET must be set.", file=sys.stderr)
-        return 1
 
-    # Dry-run mode: everything above is local; nothing below touches the network
-    if args.dry_run:
-        digest_note = (
-            "  (AI digest would be generated on a real run)"
-            if getattr(args, "ai_summary", False) and not article.digest
-            else ""
-        )
-        cover_display = str(article.cover)
-        cover_check = (
-            article.cover if article.cover.is_absolute() else project / article.cover
-        )
-        if not cover_check.exists():
-            cover_display += "   [MISSING]"
+def _print_dry_run(stage: _DraftStage, appid: str, args: argparse.Namespace) -> None:
+    """Print the planned operations; the caller guarantees no network use."""
+    article = stage.article
+    digest_note = (
+        "  (AI digest would be generated on a real run)"
+        if getattr(args, "ai_summary", False) and not article.digest
+        else ""
+    )
+    cover_display = str(article.cover)
+    cover_check = (
+        article.cover if article.cover.is_absolute() else stage.project / article.cover
+    )
+    if not cover_check.exists():
+        cover_display += "   [MISSING]"
 
-        print("=== DRY RUN ===")
-        print(f"  title:    {article.title}")
-        print(f"  author:   {article.author}")
-        print(f"  digest:   {article.digest or '(empty)'}{digest_note}")
-        print(f"  cover:    {cover_display}")
-        print(f"  images:   {len(images)}")
-        for img in images:
-            print(f"            {img.original_src}")
-        print(f"  html size: {len(wechat_html)} chars")
-        print(f"  appid:    {mask_appid(appid)}")
+    print("=== DRY RUN ===")
+    print(f"  title:    {article.title}")
+    print(f"  author:   {article.author}")
+    print(f"  digest:   {article.digest or '(empty)'}{digest_note}")
+    print(f"  cover:    {cover_display}")
+    print(f"  images:   {len(stage.images)}")
+    for img in stage.images:
+        print(f"            {img.original_src}")
+    print(f"  html size: {len(stage.wechat_html)} chars")
+    print(f"  appid:    {mask_appid(appid)}")
 
-        sample = DraftArticle(
-            title=article.title,
-            author=article.author,
-            digest=article.digest,
-            content="(HTML content)",
-            thumb_media_id="(cover media_id after upload)",
-            content_source_url=article.source_url,
-            need_open_comment=article.need_open_comment,
-            only_fans_can_comment=article.only_fans_can_comment,
-        )
-        print("\n=== Draft payload shape ===")
-        print(json.dumps(build_draft_payload(sample), ensure_ascii=False, indent=2))
-        print("\n[DRY RUN] No API calls were made.")
-        return 0
+    sample = DraftArticle(
+        title=article.title,
+        author=article.author,
+        digest=article.digest,
+        content="(HTML content)",
+        thumb_media_id="(cover media_id after upload)",
+        content_source_url=article.source_url,
+        need_open_comment=article.need_open_comment,
+        only_fans_can_comment=article.only_fans_can_comment,
+    )
+    print("\n=== Draft payload shape ===")
+    print(json.dumps(build_draft_payload(sample), ensure_ascii=False, indent=2))
+    print("\n[DRY RUN] No API calls were made.")
 
-    # --- Real execution (network from here on) ---
 
-    # 0. AI digest (opt-in)
-    if not article.digest and getattr(args, "ai_summary", False):
-        from .ai_summary import generate_digest, resolve_ai_config
-        ai_url, ai_key, ai_model = resolve_ai_config(dict(pub_cfg), dict(env))
-        if ai_key:
-            print(f"[INFO] generating AI digest via {ai_url} ...")
-            ai_digest = generate_digest(body, ai_url, ai_key, ai_model)
-            if ai_digest:
-                article = ArticleMetadata(
-                    title=article.title,
-                    author=article.author,
-                    digest=ai_digest,
-                    cover=article.cover,
-                    source_url=article.source_url,
-                    need_open_comment=article.need_open_comment,
-                    only_fans_can_comment=article.only_fans_can_comment,
-                )
-                print(f"[INFO] AI digest: {ai_digest}")
-        else:
-            print("[WARN] --ai-summary requested but no API key found; skipping.")
+def _generate_digest_if_requested(
+    args: argparse.Namespace, stage: _DraftStage, body: str, article: ArticleMetadata
+) -> ArticleMetadata:
+    """Fill in an AI digest when --ai-summary is on and none is set."""
+    if article.digest or not getattr(args, "ai_summary", False):
+        return article
 
-    # 1. Get access token
-    token = get_access_token(appid, appsecret, token_cache)
-    print(f"[INFO] token: {mask_token(token.value)}")
+    from .ai_summary import generate_digest, resolve_ai_config
+    ai_url, ai_key, ai_model = resolve_ai_config(dict(stage.pub_cfg), dict(stage.env))
+    if not ai_key:
+        print("[WARN] --ai-summary requested but no API key found; skipping.")
+        return article
 
-    # 2. Upload cover image (generate via AI if requested and missing)
+    print(f"[INFO] generating AI digest via {ai_url} ...")
+    ai_digest = generate_digest(body, ai_url, ai_key, ai_model)
+    if not ai_digest:
+        return article
+
+    print(f"[INFO] AI digest: {ai_digest}")
+    return ArticleMetadata(
+        title=article.title,
+        author=article.author,
+        digest=ai_digest,
+        cover=article.cover,
+        source_url=article.source_url,
+        need_open_comment=article.need_open_comment,
+        only_fans_can_comment=article.only_fans_can_comment,
+    )
+
+
+def _prepare_cover(
+    args: argparse.Namespace, stage: _DraftStage, article: ArticleMetadata
+) -> Path:
+    """Resolve, optionally AI-generate and optionally compress the cover."""
     cover = article.cover
     if not cover.is_absolute():
-        cover = project / cover
+        cover = stage.project / cover
 
     if not cover.exists() and getattr(args, "ai_cover", False):
         from .ai_cover import generate_cover_image, resolve_cover_ai_config
         ai_url, ai_key, ai_model, ai_prompt = resolve_cover_ai_config(
-            dict(pub_cfg), dict(env)
+            dict(stage.pub_cfg), dict(stage.env)
         )
         if not ai_key:
-            print(
-                f"[ERROR] --ai-cover requested but no API key found "
-                f"(set it via the .env file or the environment).",
-                file=sys.stderr,
+            raise _Abort(
+                "--ai-cover requested but no API key found "
+                "(set it via the .env file or the environment)."
             )
-            return 1
         print(f"[INFO] generating AI cover image for '{article.title}' ...")
-        ai_cover_path = build_dir / "ai_cover.png"
+        ai_cover_path = stage.config.build_dir / "ai_cover.png"
         try:
             cover = generate_cover_image(
                 article.title, ai_cover_path, ai_url, ai_key, ai_model, ai_prompt
             )
             print(f"[INFO] AI cover saved: {cover}")
         except Exception as e:
-            print(f"[ERROR] AI cover generation failed: {e}", file=sys.stderr)
-            return 1
+            raise _Abort(f"AI cover generation failed: {e}") from e
 
     if not cover.exists():
-        print(
-            f"[ERROR] Cover image not found: {cover}. "
-            f"Use --cover or --ai-cover.",
-            file=sys.stderr,
-        )
-        return 1
+        raise _Abort(f"Cover image not found: {cover}. Use --cover or --ai-cover.")
 
     if getattr(args, "compress_cover", False):
         cover = compress_cover(cover)
+    return cover
 
-    cover_result = _run_with_token_retry(
-        token, appid, appsecret, token_cache,
-        lambda tv: upload_cover_image(tv, cover, cover_cache),
+
+def _publish_stage(
+    args: argparse.Namespace, stage: _DraftStage, appid: str, appsecret: str
+) -> int:
+    """Network half of the draft flow: token, uploads, draft creation, state."""
+    config = stage.config
+    ensure_state_dirs(config.state_dir)
+
+    article = _generate_digest_if_requested(
+        args, stage, stage.body, stage.article
     )
 
-    # 3. Upload body images and replace src
+    token = get_access_token(appid, appsecret, config.token_cache)
+    print(f"[INFO] token: {mask_token(token.value)}")
+
+    cover = _prepare_cover(args, stage, article)
+
+    cover_result = _run_with_token_retry(
+        token, appid, appsecret, config.token_cache,
+        lambda tv: upload_cover_image(tv, cover, config.cover_cache),
+    )
+
     wechat_html = _run_with_token_retry(
-        token, appid, appsecret, token_cache,
+        token, appid, appsecret, config.token_cache,
         lambda tv: process_images(
-            tv, wechat_html, images, md_path.parent, image_cache,
+            tv, stage.wechat_html, stage.images, stage.md_path.parent,
+            config.image_cache,
             allow_missing=getattr(args, "allow_missing_images", False),
         ),
     )
 
-    # 4. Create draft
     draft_article = DraftArticle(
         title=article.title,
         author=article.author,
@@ -534,28 +546,47 @@ def cmd_draft(args: argparse.Namespace) -> int:
         only_fans_can_comment=article.only_fans_can_comment,
     )
     result = _run_with_token_retry(
-        token, appid, appsecret, token_cache,
+        token, appid, appsecret, config.token_cache,
         lambda tv: add_draft(tv, draft_article),
     )
 
-    # 5. Save state
     state = PostState(
         title=article.title,
-        source_markdown=md_path,
-        wechat_html=wechat_path,
+        source_markdown=stage.md_path,
+        wechat_html=stage.wechat_path,
         draft_media_id=result.media_id,
     )
-    state_path = save_post_state(posts_dir, state)
+    state_path = save_post_state(config.posts_dir, state)
     print(f"[OK] state saved: {state_path}")
 
-    # 6. Update wechat HTML on disk with final processed version
-    wechat_path.write_text(wechat_html, encoding="utf-8")
+    # Persist the final HTML with uploaded image URLs
+    stage.wechat_path.write_text(wechat_html, encoding="utf-8")
 
     print("\n[OK] Draft created successfully!")
     print(f"  media_id: {result.media_id}")
-    print(f"  preview:  {preview_path}")
-
+    print(f"  preview:  {stage.preview_path}")
     return 0
+
+
+def cmd_draft(args: argparse.Namespace) -> int:
+    """Create a WeChat draft from a Markdown article."""
+    try:
+        stage = _render_stage(args)
+    except _Abort as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        return 1
+
+    appid, appsecret = resolve_credentials(stage.pub_cfg, stage.env)
+    if not appid or not appsecret:
+        print("[ERROR] WECHAT_APPID and WECHAT_APPSECRET must be set.", file=sys.stderr)
+        return 1
+
+    # Dry-run mode: everything so far is local; nothing below touches the network
+    if args.dry_run:
+        _print_dry_run(stage, appid, args)
+        return 0
+
+    return _publish_stage(args, stage, appid, appsecret)
 
 
 # ── main ────────────────────────────────────────────────────────

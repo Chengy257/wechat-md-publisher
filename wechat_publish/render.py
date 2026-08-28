@@ -13,6 +13,8 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import get_lexer_by_name, TextLexer
 
+from .html_processor import process_article_html
+
 
 @dataclass(frozen=True)
 class RenderedArticle:
@@ -62,7 +64,11 @@ def _make_pygments_formatter() -> HtmlFormatter:
 
 
 def _pygments_highlight(code: str, lang: str, attrs: str) -> str:
-    """Highlight code using Pygments with inline color styles."""
+    """Highlight code using Pygments with inline color styles.
+
+    The ``attrs`` argument is part of markdown-it's highlight callback
+    contract but is intentionally unused here.
+    """
     try:
         lexer = get_lexer_by_name(lang or "text")
     except Exception:
@@ -132,14 +138,7 @@ def render_article(
     preview_path: Path | None = None,
     wechat_path: Path | None = None,
 ) -> RenderedArticle:
-    """Render a Markdown file into preview and WeChat HTML outputs."""
-    from .html_processor import (
-        convert_links_to_footnotes,
-        inline_css,
-        make_wechat_compatible,
-        sanitize_html_fragment,
-    )
-
+    """Render a Markdown file into preview and WeChat outputs."""
     markdown_text = markdown_path.read_text(encoding="utf-8")
 
     front_matter, body = parse_front_matter(markdown_text)
@@ -151,11 +150,7 @@ def render_article(
 
     # Sanitize and adapt for WeChat always; CSS inlining only when a theme
     # is loaded (an empty stylesheet must never skip the safety pipeline).
-    raw_html = sanitize_html_fragment(raw_html)
-    raw_html = make_wechat_compatible(raw_html)
-    raw_html = convert_links_to_footnotes(raw_html)
-    if theme_css:
-        raw_html = inline_css(raw_html, theme_css)
+    raw_html = process_article_html(raw_html, theme_css)
 
     # Build output paths
     if build_dir is None:

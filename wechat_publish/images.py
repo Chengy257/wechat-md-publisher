@@ -7,7 +7,10 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from bs4 import BeautifulSoup
+
 from .errors import check_wechat_response
+from .html_processor import ImageReference
 from .http import json_response, request_with_retry
 from .state import load_json_mapping, save_json_mapping
 
@@ -289,9 +292,6 @@ def process_images(
 
     Returns modified HTML with all image src replaced.
     """
-    from .html_processor import ImageReference
-    from bs4 import BeautifulSoup
-
     if not image_refs:
         return html
 
