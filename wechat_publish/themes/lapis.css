@@ -100,6 +100,7 @@
   border-radius: 6px;
   margin-bottom: 16px;
   color: #ecf0f1;
+  white-space: pre-wrap;
 }
 
 .wechat-content pre code {
@@ -142,6 +143,7 @@
 .wechat-content td {
   border: 1px solid #bdc3c7;
   padding: 8px 12px;
+  white-space: nowrap;
 }
 
 .wechat-content th {

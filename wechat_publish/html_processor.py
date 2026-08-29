@@ -170,25 +170,53 @@ def inline_css(html: str, css: str) -> str:
 
 
 def _normalize_code_blocks(soup: BeautifulSoup) -> None:
-    """Convert code block newlines/spaces into explicit HTML."""
+    """Convert code block whitespace into WeChat-safe explicit markup.
+
+    Newlines become ``<br>`` and indentation runs become non-breaking
+    spaces (WeChat collapses plain whitespace), while nested inline
+    markup such as pygments ``<span>`` tokens is preserved. Mermaid
+    blocks are left untouched: their newlines are re-read verbatim by
+    the mermaid renderer.
+    """
     for pre in soup.find_all("pre"):
         code = pre.find("code")
         if code is None:
             continue
         if code.find("br") is not None:
             continue
+        if "language-mermaid" in (code.get("class") or []):
+            continue
+        _normalize_code_whitespace(code, soup)
 
-        text = code.get_text()
-        code.clear()
 
-        lines = text.splitlines()
-        for index, line in enumerate(lines):
-            if index:
-                code.append(soup.new_tag("br"))
-            leading_spaces = len(line) - len(line.lstrip(" "))
-            if leading_spaces:
-                code.append(NavigableString(" " * leading_spaces))
-            code.append(NavigableString(line[leading_spaces:]))
+def _normalize_code_whitespace(container: Tag, soup: BeautifulSoup) -> None:
+    """Recursively replace text newlines with <br> and indentation runs
+    with no-break spaces, preserving nested tags."""
+    rebuilt = False
+    replacements: list = []
+    for child in list(container.contents):
+        if isinstance(child, NavigableString):
+            text = str(child)
+            if "\n" not in text and not text.startswith(" ") and "  " not in text:
+                replacements.append(child)
+                continue
+            rebuilt = True
+            for index, segment in enumerate(text.split("\n")):
+                if index:
+                    replacements.append(soup.new_tag("br"))
+                stripped = segment.lstrip(" ")
+                indent = len(segment) - len(stripped)
+                if indent:
+                    replacements.append(NavigableString("\u00a0" * indent))
+                if stripped:
+                    replacements.append(NavigableString(stripped))
+        else:
+            _normalize_code_whitespace(child, soup)
+            replacements.append(child)
+    if rebuilt:
+        container.clear()
+        for item in replacements:
+            container.append(item)
 
 
 def _stripe_tables(soup: BeautifulSoup) -> None:

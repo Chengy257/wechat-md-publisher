@@ -30,7 +30,13 @@ from .draft import DraftArticle, add_draft, build_draft_payload, validate_publis
 from .errors import RemoteDraftCreatedLocalStateFailed, WeChatAPIError
 from .html_processor import discover_images, process_article_html
 from .images import compress_cover, process_images, upload_cover_image
-from .render import _wrap_preview, parse_front_matter, render_article, render_markdown_to_html
+from .render import (
+    _wrap_preview,
+    parse_front_matter,
+    pygments_style_for_theme,
+    render_article,
+    render_markdown_to_html,
+)
 from .state import (
     ensure_state_dirs,
     quarantine_legacy_state,
@@ -289,6 +295,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         build_dir=args.out.parent if args.out else None,
         preview_path=args.preview_out,
         wechat_path=args.out,
+        pygments_style=pygments_style_for_theme(args.theme),
     )
 
     print(f"[OK] preview: {result.preview_path}")
@@ -406,7 +413,9 @@ def _render_stage(args: argparse.Namespace, write_outputs: bool = True) -> _Draf
             "--autofill-front-matter, or add front matter."
         )
 
-    raw_html = render_markdown_to_html(body)
+    raw_html = render_markdown_to_html(
+        body, pygments_style=pygments_style_for_theme(getattr(args, "theme", None))
+    )
     build_dir = config.build_dir
     preview_path = build_dir / "article.preview.html"
     wechat_path = build_dir / "article.wechat.html"

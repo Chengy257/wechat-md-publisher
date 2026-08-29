@@ -138,3 +138,25 @@ class TestRenderArticle:
         result = render_article(md_file, build_dir=tmp_path / "build")
         assert "中文标题" in result.wechat_html
         assert "中文正文内容" in result.wechat_html
+
+
+class TestPygmentsStyleSelection:
+    def test_dark_code_themes_use_a_dark_palette(self):
+        from wechat_publish.render import pygments_style_for_theme
+
+        assert pygments_style_for_theme("tech") == "github-dark"
+        assert pygments_style_for_theme("elegant") == "github-dark"
+        assert pygments_style_for_theme("lapis") == "github-dark"
+        assert pygments_style_for_theme("default") == "friendly"
+        assert pygments_style_for_theme("simple") == "friendly"
+        assert pygments_style_for_theme(None) == "friendly"
+        assert pygments_style_for_theme("unknown-theme") == "friendly"
+
+    def test_pygments_style_changes_token_colors(self):
+        code = "```python\nif True:\n    print('hi')\n```\n"
+        light = render_markdown_to_html(code)
+        dark = render_markdown_to_html(code, pygments_style="github-dark")
+        assert light != dark
+        assert 'style="color:' in dark
+        # Both keep the code structure intact
+        assert "<pre><code" in light and "<pre><code" in dark

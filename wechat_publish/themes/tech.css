@@ -113,6 +113,7 @@
   margin: 1em 0;
   background: #161b22;
   border: 1px solid #21262d;
+  white-space: pre-wrap;
 }
 
 .wechat-content pre code {
@@ -179,6 +180,7 @@
   border: 1px solid #21262d;
   padding: 6px 12px;
   text-align: left;
+  white-space: nowrap;
 }
 
 .wechat-content th {

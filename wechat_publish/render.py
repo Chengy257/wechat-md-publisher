@@ -54,33 +54,60 @@ def parse_front_matter(markdown_text: str) -> tuple[Mapping[str, object], str]:
     return meta, body
 
 
-def _make_pygments_formatter() -> HtmlFormatter:
+_DEFAULT_CODE_STYLE = "friendly"
+
+# Themes whose code blocks have a dark background pair with a dark pygments
+# palette: tokens rendered with the light "friendly" palette are barely
+# readable on dark backgrounds.
+_DARK_CODE_THEMES = {"elegant", "lapis", "tech"}
+_DARK_CODE_STYLE = "github-dark"
+
+
+def pygments_style_for_theme(theme: str | None) -> str:
+    """Return the pygments palette matching a bundled theme's code background."""
+    if (theme or "").lower() in _DARK_CODE_THEMES:
+        return _DARK_CODE_STYLE
+    return _DEFAULT_CODE_STYLE
+
+
+def _make_pygments_formatter(style_name: str = _DEFAULT_CODE_STYLE) -> HtmlFormatter:
     """Create a Pygments HTML formatter with inline styles for WeChat."""
-    return HtmlFormatter(
-        nowrap=True,
-        noclasses=True,
-        style="friendly",
-    )
+    from pygments.styles import get_style_by_name
 
-
-def _pygments_highlight(code: str, lang: str, attrs: str) -> str:
-    """Highlight code using Pygments with inline color styles.
-
-    The ``attrs`` argument is part of markdown-it's highlight callback
-    contract but is intentionally unused here.
-    """
     try:
-        lexer = get_lexer_by_name(lang or "text")
-    except Exception:
-        lexer = TextLexer()
-    formatter = _make_pygments_formatter()
-    return highlight(code, lexer, formatter)
+        style = get_style_by_name(style_name)
+    except ValueError:
+        style = get_style_by_name(_DEFAULT_CODE_STYLE)
+    return HtmlFormatter(nowrap=True, noclasses=True, style=style)
 
 
-def render_markdown_to_html(markdown_text: str) -> str:
+def _build_highlight(style_name: str):
+    """Build a markdown-it highlight callback bound to one pygments palette."""
+    formatter = _make_pygments_formatter(style_name)
+
+    def _pygments_highlight(code: str, lang: str, attrs: str) -> str:
+        """Highlight code using Pygments with inline color styles.
+
+        The ``attrs`` argument is part of markdown-it's highlight callback
+        contract but is intentionally unused here.
+        """
+        try:
+            lexer = get_lexer_by_name(lang or "text")
+        except Exception:
+            lexer = TextLexer()
+        return highlight(code, lexer, formatter)
+
+    return _pygments_highlight
+
+
+def render_markdown_to_html(
+    markdown_text: str, *, pygments_style: str = _DEFAULT_CODE_STYLE
+) -> str:
     """Render Markdown to raw HTML with Pygments syntax highlighting."""
     md = (
-        MarkdownIt("commonmark", {"html": True, "highlight": _pygments_highlight})
+        MarkdownIt(
+            "commonmark", {"html": True, "highlight": _build_highlight(pygments_style)}
+        )
         .enable("table")
         .enable("strikethrough")
     )
@@ -137,6 +164,7 @@ def render_article(
     build_dir: Path | None = None,
     preview_path: Path | None = None,
     wechat_path: Path | None = None,
+    pygments_style: str = _DEFAULT_CODE_STYLE,
 ) -> RenderedArticle:
     """Render a Markdown file into preview and WeChat outputs."""
     markdown_text = markdown_path.read_text(encoding="utf-8")
@@ -146,7 +174,7 @@ def render_article(
     # Remove <!--more--> marker
     body = body.replace("<!--more-->", "")
 
-    raw_html = render_markdown_to_html(body)
+    raw_html = render_markdown_to_html(body, pygments_style=pygments_style)
 
     # Sanitize and adapt for WeChat always; CSS inlining only when a theme
     # is loaded (an empty stylesheet must never skip the safety pipeline).

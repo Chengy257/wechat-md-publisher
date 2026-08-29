@@ -14,7 +14,7 @@
   display: table;
   padding: 0 1em;
   border-bottom: 2px solid #3498db;
-  margin: 2em auto 1em;
+  margin: 1.6em auto 1em;
   font-size: 22px;
   font-weight: bold;
   text-align: center;
@@ -25,7 +25,7 @@
 .wechat-content h2 {
   display: table;
   padding: 0.2em 1.2em;
-  margin: 2.5em auto 1.5em;
+  margin: 2em auto 1.25em;
   color: #fff;
   background: #3498db;
   font-size: 18px;
@@ -115,6 +115,7 @@
   margin: 1em 0;
   background: #2c3e50;
   color: #ecf0f1;
+  white-space: pre-wrap;
 }
 
 .wechat-content pre code {
@@ -181,6 +182,7 @@
   border: 1px solid #dfdfdf;
   padding: 6px 12px;
   text-align: left;
+  white-space: nowrap;
 }
 
 .wechat-content th {

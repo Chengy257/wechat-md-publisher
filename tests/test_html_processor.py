@@ -272,3 +272,29 @@ class TestConvertLinksToFootnotes:
         assert 'class="footnote-ref"' in result
         assert 'class="footnotes"' in result
         assert 'class="footnote-url"' in result
+
+
+class TestCodeBlockWhitespacePreservesMarkup:
+    def test_pygments_spans_survive_normalization(self):
+        html = (
+            '<pre><code class="language-python">'
+            '<span style="color: #007020">print</span>'
+            '<span style="color: #4070A0">"hi"</span>\n'
+            "</code></pre>"
+        )
+        result = make_wechat_compatible(html)
+        assert 'style="color: #007020"' in result
+        assert 'style="color: #4070A0"' in result
+        assert "<br" in result
+
+    def test_indentation_becomes_nbsp(self):
+        html = "<pre><code>line1\n    line2</code></pre>"
+        result = make_wechat_compatible(html)
+        assert "\u00a0\u00a0\u00a0\u00a0line2" in result
+        assert "<br" in result
+
+    def test_mermaid_block_keeps_newlines(self):
+        html = '<pre><code class="language-mermaid">graph TD\nA-->B</code></pre>'
+        result = make_wechat_compatible(html)
+        assert "\n" in result
+        assert "<br" not in result
