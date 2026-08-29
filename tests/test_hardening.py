@@ -51,9 +51,13 @@ class TestValidateDraftArticle:
         with pytest.raises(ValueError, match="too long"):
             validate_draft_article(self._article(digest="x" * 121))
 
-    def test_content_too_long_rejected(self):
-        with pytest.raises(ValueError, match="too long"):
-            validate_draft_article(self._article(content="<p>" + "x" * 20_000))
+    def test_content_over_documented_limit_warns_but_passes(self, capsys):
+        validate_draft_article(self._article(content="<p>" + "x" * 20_000))
+        assert "documented 20k-char draft limit" in capsys.readouterr().out
+
+    def test_content_over_byte_hard_limit_rejected(self):
+        with pytest.raises(ValueError, match="content too large"):
+            validate_draft_article(self._article(content="x" * 1_000_001))
 
     def test_missing_thumb_media_id_rejected(self):
         with pytest.raises(ValueError, match="thumb_media_id"):

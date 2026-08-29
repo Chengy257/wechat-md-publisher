@@ -12,11 +12,15 @@ from .http import RetryPolicy, json_response, request_with_retry, require_field
 
 API_BASE = "https://api.weixin.qq.com"
 
-# Official draft/add limits
+# Official draft/add limits. WeChat documents content as "must be under
+# 20k chars and 1MB", but empirically (2026-08) the API accepts drafts well
+# beyond 20k chars while the 1MB byte boundary holds. Treat 20k chars as a
+# warning threshold and enforce only the byte boundary.
 _MAX_TITLE_CHARS = 64
 _MAX_AUTHOR_CHARS = 8
 _MAX_DIGEST_CHARS = 120
-_MAX_CONTENT_CHARS = 20_000
+_DOCUMENTED_CONTENT_CHARS = 20_000
+_MAX_CONTENT_BYTES = 1_000_000
 
 
 @dataclass(frozen=True)
@@ -58,11 +62,18 @@ def validate_draft_article(article: DraftArticle) -> None:
         raise ValueError(
             f"Digest too long: {len(article.digest)} chars (max {_MAX_DIGEST_CHARS})."
         )
-    if len(article.content) >= _MAX_CONTENT_CHARS:
+    content_bytes = len(article.content.encode("utf-8"))
+    if content_bytes >= _MAX_CONTENT_BYTES:
         raise ValueError(
-            f"Article content too long: {len(article.content)} chars "
-            f"(official limit {_MAX_CONTENT_CHARS}). "
+            f"Article content too large: {content_bytes / 1024:.0f} KB "
+            f"(hard limit {_MAX_CONTENT_BYTES // 1024} KB). "
             f"Shorten the article or simplify inline styles."
+        )
+    if len(article.content) >= _DOCUMENTED_CONTENT_CHARS:
+        print(
+            f"[WARN] content is {len(article.content)} chars, beyond WeChat's "
+            f"documented 20k-char draft limit. The API accepts larger drafts in "
+            f"practice; verify the rendering in the draft box."
         )
     if not article.thumb_media_id:
         raise ValueError("thumb_media_id is required (upload a cover first).")
@@ -76,7 +87,7 @@ def validate_publish_preflight(
     need_open_comment: int,
     only_fans_can_comment: int,
     content_source_url: str,
-    html_chars: int,
+    content_html: str,
     cover_path: Path | None,
 ) -> None:
     """Validate every locally-checkable draft field before any network request.
@@ -118,11 +129,18 @@ def validate_publish_preflight(
             f"content_source_url must start with http:// or https:// "
             f"(got: {content_source_url}). Fix the source_url field."
         )
-    if html_chars >= _MAX_CONTENT_CHARS:
+    content_bytes = len(content_html.encode("utf-8"))
+    if content_bytes >= _MAX_CONTENT_BYTES:
         raise ValueError(
-            f"Article content too long: {html_chars} chars "
-            f"(official limit {_MAX_CONTENT_CHARS}). "
+            f"Article content too large: {content_bytes / 1024:.0f} KB "
+            f"(hard limit {_MAX_CONTENT_BYTES // 1024} KB). "
             f"Shorten the article or simplify inline styles."
+        )
+    if len(content_html) >= _DOCUMENTED_CONTENT_CHARS:
+        print(
+            f"[WARN] content is {len(content_html)} chars, beyond WeChat's "
+            f"documented 20k-char draft limit. The API accepts larger drafts in "
+            f"practice; verify the rendering in the draft box."
         )
     if cover_path is not None and not (cover_path.exists() and cover_path.is_file()):
         raise ValueError(

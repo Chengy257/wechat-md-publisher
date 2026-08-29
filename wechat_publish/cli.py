@@ -697,7 +697,7 @@ def cmd_draft(args: argparse.Namespace) -> int:
         need_open_comment=stage.article.need_open_comment,
         only_fans_can_comment=stage.article.only_fans_can_comment,
         content_source_url=stage.article.source_url,
-        html_chars=len(stage.wechat_html),
+        content_html=stage.wechat_html,
         cover_path=cover_path,
     )
 

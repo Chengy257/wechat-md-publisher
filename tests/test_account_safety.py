@@ -352,7 +352,7 @@ class TestValidatePublishPreflight:
             need_open_comment=1,
             only_fans_can_comment=0,
             content_source_url="",
-            html_chars=100,
+            content_html="x" * 100,
             cover_path=None,
         )
         fields.update(overrides)
@@ -391,9 +391,13 @@ class TestValidatePublishPreflight:
         with pytest.raises(ValueError, match="http"):
             self._check(content_source_url="example.com/post")
 
-    def test_html_over_limit_rejected(self):
-        with pytest.raises(ValueError, match="content too long"):
-            self._check(html_chars=20_000)
+    def test_html_over_documented_limit_warns_but_passes(self, capsys):
+        self._check(content_html="x" * 20_001)
+        assert "documented 20k-char draft limit" in capsys.readouterr().out
+
+    def test_html_over_byte_hard_limit_rejected(self):
+        with pytest.raises(ValueError, match="content too large"):
+            self._check(content_html="x" * 1_000_001)
 
     def test_missing_cover_file_rejected(self, tmp_path: Path):
         with pytest.raises(ValueError, match="Cover image not found"):
