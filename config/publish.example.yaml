@@ -12,10 +12,15 @@ article:
 paths:
   build_dir: "build"
   state_dir: ".wechat_publish"
-  token_cache: ".wechat_publish/token.json"
-  image_cache: ".wechat_publish/image_cache.json"
-  cover_cache: ".wechat_publish/cover_cache.json"
   posts_dir: ".wechat_publish/posts"
+  # token/image/cover caches are account-scoped since v0.1.1:
+  # <state_dir>/accounts/<account-key>/{token,image_cache,cover_cache}.json
+  # (the old paths.token_cache/image_cache/cover_cache keys are deprecated)
+
+# Remote (http/https) article images are downloaded and re-uploaded by this
+# tool. Loopback/private-network targets are blocked by default (SSRF guard).
+remote_images:
+  allow_private_networks: false
 
 wechat:
   appid_env:

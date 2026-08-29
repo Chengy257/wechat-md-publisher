@@ -13,6 +13,7 @@ dependencies = [
   "beautifulsoup4>=4.12",
   "cssutils>=2.9",
   "markdown-it-py>=3.0",
+  "nh3>=0.2",
   "premailer>=3.10",
   "Pygments>=2.13",
   "python-dotenv>=1.0",

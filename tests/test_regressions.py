@@ -162,8 +162,15 @@ class TestMermaidSrcRelative:
 
 class TestImageSizeLimits:
     def test_cover_accepts_up_to_10mb(self, tmp_path: Path):
+        import os
+
+        from PIL import Image
+
         cover = tmp_path / "cover.png"
-        cover.write_bytes(b"\x89PNG" + b"\x00" * (2 * 1024 * 1024))
+        # A real (noise) PNG above 1 MB: must pass the byte-level check.
+        noise = os.urandom(1400 * 700 * 3)
+        Image.frombytes("RGB", (1400, 700), noise).save(cover, "PNG")
+        assert 1024 * 1024 < cover.stat().st_size <= 10 * 1024 * 1024
         validate_cover_image(cover)  # should not raise
 
     def test_body_image_rejects_over_1mb(self, tmp_path: Path):

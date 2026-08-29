@@ -38,6 +38,7 @@ class PublisherConfig:
     image_cache: Path
     cover_cache: Path
     posts_dir: Path
+    remote_images_allow_private: bool = False
 
 
 # Environment variable name alternatives
@@ -188,7 +189,7 @@ def load_publish_config(path: Path) -> Mapping[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-_KNOWN_CONFIG_KEYS = {"default_author", "article", "paths", "wechat", "ai"}
+_KNOWN_CONFIG_KEYS = {"default_author", "article", "paths", "wechat", "ai", "remote_images"}
 
 
 def resolve_config(
@@ -215,6 +216,21 @@ def resolve_config(
     article_cfg = publish_config.get("article", {})
     paths_cfg = publish_config.get("paths", {})
     wechat_cfg = publish_config.get("wechat", {})
+    remote_cfg = publish_config.get("remote_images", {})
+    if not isinstance(remote_cfg, dict):
+        raise ValueError(
+            f"config field 'remote_images' must be a mapping "
+            f"(got: {remote_cfg!r})"
+        )
+
+    # remote_images.allow_private_networks: explicit opt-in for downloading
+    # remote images from loopback/private/reserved network addresses.
+    remote_allow_private = remote_cfg.get("allow_private_networks", False)
+    if not isinstance(remote_allow_private, bool):
+        raise ValueError(
+            f"config field 'remote_images.allow_private_networks' must be a "
+            f"boolean (got: {remote_allow_private!r})"
+        )
 
     # Author resolution: CLI > front_matter > publish.yaml > env
     author = (
@@ -313,6 +329,7 @@ def resolve_config(
         image_cache=image_cache,
         cover_cache=cover_cache,
         posts_dir=posts_dir,
+        remote_images_allow_private=remote_allow_private,
     )
 
 

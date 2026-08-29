@@ -629,6 +629,7 @@ def _publish_stage(
             tv, stage.wechat_html, stage.images, stage.md_path.parent,
             image_cache,
             allow_missing=getattr(args, "allow_missing_images", False),
+            allow_private_networks=config.remote_images_allow_private,
         ),
     )
 

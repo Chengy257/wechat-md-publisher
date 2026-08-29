@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 import requests
 import responses
+from conftest import make_png
 
 from wechat_publish.ai_cover import _DEFAULT_MODEL, generate_cover_image
 from wechat_publish.cli import main
@@ -186,10 +187,8 @@ def _token_cache_path(tmp_project: Path) -> Path:
 
 
 def _setup_article(tmp_project: Path) -> None:
-    fig = tmp_project / "input" / "fig1.png"
-    fig.write_bytes(b"\x89PNG" + b"\x00" * 50)
-    cover = tmp_project / "input" / "cover.png"
-    cover.write_bytes(b"\x89PNG" + b"\x00" * 50)
+    make_png(tmp_project / "input" / "fig1.png")
+    make_png(tmp_project / "input" / "cover.png")
     article = tmp_project / "input" / "article.md"
     article.write_text(
         '---\ntitle: "集成测试文章"\nauthor: "Cy257"\n---\n\n'

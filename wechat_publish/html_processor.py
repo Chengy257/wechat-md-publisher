@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import cssutils
+import nh3
 from bs4 import BeautifulSoup, Tag
 from bs4.element import NavigableString
 from premailer import transform as premailer_transform
@@ -25,8 +26,33 @@ class ImageReference:
     is_remote: bool
 
 
-# Tags to strip entirely from WeChat HTML
-_STRIP_TAGS = {"script", "iframe", "style", "link", "form", "input", "button", "meta", "head"}
+# Allowlist for WeChat article HTML: everything not listed is dropped.
+# Covers the full markdown-it output surface (headings, inline styles,
+# tables, code blocks with pygments spans, mermaid code fences) plus the
+# transform products of this module (figure/figcaption, section, sup/sub).
+_ALLOWED_TAGS = {
+    "p", "h1", "h2", "h3", "h4", "h5", "h6",
+    "strong", "em", "b", "i", "u", "s", "del", "sub", "sup",
+    "span", "section", "blockquote", "pre", "code", "br", "hr",
+    "img", "a", "ul", "ol", "li",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "figure", "figcaption",
+}
+
+# class/style are allowed on every tag (theme CSS + pygments inline styles
+# + the class hooks used by _flatten_lists/_convert_headings/_stripe_tables
+# and mermaid.py's `pre > code.language-mermaid` selector).
+_BASE_ATTRS = {"class", "style"}
+_TAG_ATTRS: dict[str, set[str]] = {
+    "img": {"src", "alt", "title"},
+    "a": {"href", "title"},
+    "th": {"colspan", "rowspan"},
+    "td": {"colspan", "rowspan"},
+}
+_NH3_ATTRIBUTES = {"*": _BASE_ATTRS, **_TAG_ATTRS}
+
+# Tags whose *content* is dropped along with the tag itself.
+_CLEAN_CONTENT_TAGS = {"script", "style"}
 
 _UNSUPPORTED_CSS_PROPS = {"zoom", "word-break", "word-wrap"}
 
@@ -61,26 +87,40 @@ def process_article_html(html: str, theme_css: str = "") -> str:
 
 
 def sanitize_html_fragment(html: str) -> str:
-    """Remove unsupported tags and unsafe content from a WeChat HTML fragment."""
-    soup = BeautifulSoup(html, "html.parser")
+    """Remove unsafe/unsupported HTML constructs for normal article authoring.
 
-    for tag_name in _STRIP_TAGS:
-        for tag in soup.find_all(tag_name):
-            tag.decompose()
+    Uses an nh3 (ammonia) allowlist: only known-safe tags and attributes
+    survive, script/style contents are dropped, event handlers and
+    ``javascript:`` URLs are removed, and URL schemes are restricted to
+    http/https (relative URLs and #anchors pass through). The surviving
+    fragment then goes through a BeautifulSoup pass that keeps the on*
+    attribute cleanup as defense in depth and strips CSS properties
+    premailer/WeChat cannot handle.
 
+    This hardens the normal authoring pipeline (markdown-it output plus
+    trusted raw HTML); it does not claim to make arbitrary untrusted HTML
+    safe for every embedding context.
+    """
+    cleaned = nh3.clean(
+        html,
+        tags=_ALLOWED_TAGS,
+        clean_content_tags=_CLEAN_CONTENT_TAGS,
+        attributes=_NH3_ATTRIBUTES,
+        url_schemes={"http", "https"},
+    )
+
+    soup = BeautifulSoup(cleaned, "html.parser")
     for tag in soup.find_all(True):
-        attrs_to_remove = [
-            attr for attr in tag.attrs
-            if attr.startswith("on") or attr == "onclick"
-        ]
+        # Defense in depth: nh3 already drops event handlers.
+        attrs_to_remove = [attr for attr in tag.attrs if attr.startswith("on")]
         for attr in attrs_to_remove:
             del tag[attr]
 
         # Remove unsupported CSS properties from inline styles
         if tag.has_attr("style"):
-            cleaned = _strip_unsupported_css(tag["style"])
-            if cleaned:
-                tag["style"] = cleaned
+            cleaned_style = _strip_unsupported_css(tag["style"])
+            if cleaned_style:
+                tag["style"] = cleaned_style
             else:
                 del tag["style"]
 

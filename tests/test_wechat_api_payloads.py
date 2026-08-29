@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 import pytest
+from conftest import make_png
 
 from wechat_publish.draft import DraftArticle, build_draft_payload
 from wechat_publish.errors import (
@@ -151,8 +152,7 @@ class TestMaskToken:
 
 class TestImageValidation:
     def test_valid_image(self, tmp_path: Path):
-        img = tmp_path / "test.png"
-        img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
+        img = make_png(tmp_path / "test.png")
         validate_body_image(img)  # Should not raise
 
     def test_missing_file(self, tmp_path: Path):

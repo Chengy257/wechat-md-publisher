@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import socket
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -15,15 +18,34 @@ from .state import load_json_mapping, save_json_mapping
 
 API_BASE = "https://api.weixin.qq.com"
 
-# Conservative defaults: jpg/png under 1 MB for body images (media/uploadimg);
-# permanent material (material/add_material) allows up to 10 MB for covers.
-_ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp"}
+# Per-endpoint whitelists (WeChat official docs): media/uploadimg (article
+# body images) only accepts JPG/PNG under 1 MB, while material/add_material
+# (permanent cover material) accepts JPG/JPEG/PNG/BMP/GIF under 10 MB.
+_BODY_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 _MAX_BODY_IMAGE_BYTES = 1 * 1024 * 1024  # 1 MB
+_COVER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif"}
 _MAX_COVER_BYTES = 10 * 1024 * 1024  # 10 MB
+
+# Magic-number sniffing: file header bytes -> canonical extension.
+# Ordered so longer/unique signatures are checked before the short "BM".
+_MAGIC_HEADERS: tuple[tuple[bytes, str], ...] = (
+    (b"\xff\xd8\xff", ".jpg"),
+    (b"\x89PNG\r\n\x1a\n", ".png"),
+    (b"GIF87a", ".gif"),
+    (b"GIF89a", ".gif"),
+    (b"BM", ".bmp"),
+)
+
+# Pillow Image.format values -> canonical extension (same family check).
+_PILLOW_FORMAT_TO_EXT = {"JPEG": ".jpg", "PNG": ".png", "GIF": ".gif", "BMP": ".bmp"}
 
 # Remote download guards
 _MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024
 _DOWNLOAD_CHUNK = 64 * 1024
+
+# SSRF guards: redirect statuses handled manually so every hop is re-validated.
+_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+_MAX_REDIRECTS = 5
 
 
 @dataclass(frozen=True)
@@ -50,13 +72,68 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _canonical_ext(suffix: str) -> str:
+    """Map a file suffix to its canonical extension (.jpeg -> .jpg)."""
+    return ".jpg" if suffix.lower() == ".jpeg" else suffix.lower()
+
+
+def _sniff_format(data: bytes) -> str | None:
+    """Detect the image format from magic header bytes.
+
+    Returns the canonical extension (".jpg" for JPEG) or None when the
+    bytes do not match any known image signature.
+    """
+    for magic, ext in _MAGIC_HEADERS:
+        if data.startswith(magic):
+            return ext
+    return None
+
+
+def _validate_image_bytes(path: Path) -> None:
+    """Verify the real byte-level format of an image matches its suffix.
+
+    Magic-number sniffing always runs. When Pillow is available the file is
+    additionally opened and verified, and Pillow's detected format must
+    belong to the same family as the suffix (JPEG<->.jpg/.jpeg,
+    PNG<->.png, GIF<->.gif, BMP<->.bmp).
+    """
+    with open(path, "rb") as f:
+        header = f.read(16)
+
+    canonical = _canonical_ext(path.suffix)
+    sniffed = _sniff_format(header)
+    if sniffed is None:
+        raise ValueError(f"文件内容与图片格式不符（无法识别的文件头）: {path}")
+    if sniffed != canonical:
+        raise ValueError(
+            f"文件内容与图片格式不符（实际格式 {sniffed}，后缀 {canonical}）: {path}"
+        )
+
+    try:
+        from PIL import Image
+    except ImportError:
+        return  # Graceful degradation: magic-number check above still applies.
+
+    try:
+        with Image.open(path) as img:
+            pil_format = img.format
+            img.verify()
+    except Exception as e:
+        raise ValueError(f"文件内容与图片格式不符（无法解析图片）: {path}") from e
+    expected = _PILLOW_FORMAT_TO_EXT.get(pil_format or "")
+    if expected is None or expected != canonical:
+        raise ValueError(
+            f"文件内容与图片格式不符（Pillow 识别为 {pil_format}，后缀 {canonical}）: {path}"
+        )
+
+
 def validate_cover_image(path: Path) -> None:
     """Validate a cover image before permanent material upload."""
     if not path.exists():
         raise FileNotFoundError(f"Cover image not found: {path}")
     if not path.is_file():
         raise ValueError(f"Cover path is not a file: {path}")
-    _validate_image(path, _MAX_COVER_BYTES)
+    _validate_image(path, _MAX_COVER_BYTES, _COVER_EXTENSIONS)
 
 
 def validate_body_image(path: Path) -> None:
@@ -65,29 +142,107 @@ def validate_body_image(path: Path) -> None:
         raise FileNotFoundError(f"Body image not found: {path}")
     if not path.is_file():
         raise ValueError(f"Body image path is not a file: {path}")
-    _validate_image(path, _MAX_BODY_IMAGE_BYTES)
+    _validate_image(path, _MAX_BODY_IMAGE_BYTES, _BODY_EXTENSIONS)
 
 
-def _validate_image(path: Path, max_bytes: int) -> None:
-    """Common image validation."""
+def _validate_image(path: Path, max_bytes: int, allowed_extensions: set[str]) -> None:
+    """Common image validation: suffix whitelist, size cap, real format."""
     ext = path.suffix.lower()
-    if ext not in _ALLOWED_EXTENSIONS:
+    if ext not in allowed_extensions:
         raise ValueError(
             f"Image format '{ext}' not allowed. "
-            f"Supported: {', '.join(sorted(_ALLOWED_EXTENSIONS))}"
+            f"Supported: {', '.join(sorted(allowed_extensions))}"
         )
     size = path.stat().st_size
     if size > max_bytes:
         raise ValueError(
             f"Image too large: {size / 1024:.1f} KB (max {max_bytes / 1024:.0f} KB): {path}"
         )
+    _validate_image_bytes(path)
 
 
-def _resolve_image_to_file(ref_src: str, resolved_path: Path | None, is_remote: bool) -> tuple[Path, bool]:
+def _is_blocked_ip(ip: str) -> bool:
+    """Return True when *ip* must never be contacted for remote images.
+
+    Blocks loopback, private, link-local, multicast, reserved and
+    unspecified addresses (the usual SSRF target space, including
+    169.254.169.254 metadata endpoints).
+    """
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return True  # Unparsable address: block rather than risk it.
+    return any(
+        (
+            addr.is_loopback,
+            addr.is_private,
+            addr.is_link_local,
+            addr.is_multicast,
+            addr.is_reserved,
+            addr.is_unspecified,
+        )
+    )
+
+
+def _validate_remote_url(url: str, allow_private: bool = False) -> None:
+    """Validate a remote image URL before any request is issued.
+
+    The scheme must be http/https. Unless *allow_private* is set, the host
+    must not be ``localhost`` and every address it resolves to (IP literal
+    or full DNS resolution) must be a public address; any blocked hit,
+    including resolution failures, raises ValueError. With
+    ``allow_private=True`` only the scheme check remains.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Remote image URL must use http or https: {url}")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError(f"Remote image URL has no host: {url}")
+    if allow_private:
+        return
+
+    if hostname.lower() == "localhost":
+        raise ValueError(
+            f"Remote image URL points at localhost: {url}. "
+            f"If this is intentional, set remote_images.allow_private_networks: true."
+        )
+
+    try:
+        ipaddress.ip_address(hostname)
+        ips = [hostname]  # Host is already an IP literal.
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(hostname, None)
+        except OSError as e:
+            raise ValueError(
+                f"Remote image host could not be resolved (blocked): {url}. "
+                f"If this is intentional, set remote_images.allow_private_networks: true."
+            ) from e
+        ips = [info[4][0] for info in infos]
+
+    for ip in ips:
+        if _is_blocked_ip(ip):
+            raise ValueError(
+                f"Remote image URL resolves to a private/blocked address: {url}. "
+                f"If this is intentional, set remote_images.allow_private_networks: true."
+            )
+
+
+def _resolve_image_to_file(
+    ref_src: str,
+    resolved_path: Path | None,
+    is_remote: bool,
+    allow_private: bool = False,
+) -> tuple[Path, bool]:
     """Resolve an image reference to a local file path.
 
     Downloads remote images to a temp file. Returns (path, is_temp); the
     caller must delete the file when ``is_temp`` is True.
+
+    Remote downloads follow redirects manually: every hop (including the
+    original URL) is re-validated by :func:`_validate_remote_url` before the
+    request is issued, so a redirect into a private network is blocked.
     """
     if not is_remote:
         if resolved_path is None:
@@ -99,10 +254,29 @@ def _resolve_image_to_file(ref_src: str, resolved_path: Path | None, is_remote: 
             return resolved_path, False
         raise FileNotFoundError(f"Local image not found: {resolved_path}")
 
-    # Remote image: stream-download with a hard size cap
-    resp = request_with_retry(
-        "GET", ref_src, operation="download_image", timeout=60, stream=True
-    )
+    # Remote image: manual redirect loop so each hop is SSRF-checked.
+    url = ref_src
+    hops = 0
+    while True:
+        _validate_remote_url(url, allow_private)
+        resp = request_with_retry(
+            "GET", url, operation="download_image", timeout=60, stream=True,
+            allow_redirects=False,
+        )
+        if resp.status_code not in _REDIRECT_STATUSES:
+            break
+        location = resp.headers.get("Location", "")
+        if not location:
+            raise ValueError(
+                f"Remote image redirect is missing a Location header: {url}"
+            )
+        hops += 1
+        if hops > _MAX_REDIRECTS:
+            raise ValueError(
+                f"too many redirects (>{_MAX_REDIRECTS}) while downloading: {ref_src}"
+            )
+        url = urljoin(url, location)
+
     resp.raise_for_status()
     content_type = resp.headers.get("Content-Type", "")
     if content_type and not content_type.lower().startswith("image/"):
@@ -133,12 +307,10 @@ def _resolve_image_to_file(ref_src: str, resolved_path: Path | None, is_remote: 
 
 def _url_to_suffix(url: str) -> str:
     """Extract file extension from URL, default to .png."""
-    from urllib.parse import urlparse
-
     path = urlparse(url).path
     if "." in path.split("/")[-1]:
         ext = "." + path.split("/")[-1].rsplit(".", 1)[1].lower()
-        if ext in _ALLOWED_EXTENSIONS:
+        if ext in _BODY_EXTENSIONS:
             return ext
     return ".png"
 
@@ -293,12 +465,17 @@ def process_images(
     base_dir: Path,
     cache_path: Path | None = None,
     allow_missing: bool = False,
+    allow_private_networks: bool = False,
 ) -> str:
     """Upload all body images and replace src in HTML with WeChat URLs.
 
     By default any failed upload aborts the run (raising RuntimeError) so a
     draft never ships with broken local image paths. With
     ``allow_missing=True`` failures only warn and the original src is kept.
+
+    Remote image downloads are blocked from contacting loopback/private/
+    link-local/reserved addresses unless ``allow_private_networks=True``
+    (wired to the ``remote_images.allow_private_networks`` config option).
 
     Returns modified HTML with all image src replaced.
     """
@@ -313,7 +490,8 @@ def process_images(
         tmp_file: Path | None = None
         try:
             local_path, is_temp = _resolve_image_to_file(
-                ref.original_src, ref.resolved_path, ref.is_remote
+                ref.original_src, ref.resolved_path, ref.is_remote,
+                allow_private=allow_private_networks,
             )
             if is_temp:
                 tmp_file = local_path

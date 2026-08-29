@@ -4,13 +4,13 @@
 
 ## 功能
 
-- **Markdown → 微信正文**：sanitize → 微信兼容化（代码块/列表/表格/标题改造）→ 外链转脚注 → CSS 内联（premailer），全流程无条件执行，杜绝未消毒输出
+- **Markdown → 微信正文**：sanitize（nh3 allowlist）→ 微信兼容化（代码块/列表/表格/标题改造）→ 外链转脚注 → CSS 内联（premailer），全流程无条件执行。sanitize 按 allowlist 语义移除对正常文章排版不安全/不支持的 HTML 构件（未列入白名单的标签与属性、`<script>/<style>` 内容、事件属性、非 http/https 链接等）；它服务于正常创作流程，**不承诺对任意不可信 HTML 安全**
 - **内置主题**：`default / elegant / lapis / simple / tech`（随包分发，pip 安装即用），或用 `--style` 指定自定义 CSS
-- **图片处理**：正文图自动上传（`media/uploadimg`）并替换 src；封面走永久素材（`material/add_material`，≤10MB）；sha256 缓存避免重复上传；`--compress-cover` 可选 Pillow 压缩（AI 生成的封面始终自动压缩）
+- **图片处理**：正文图自动上传（`media/uploadimg`，仅支持 JPG/PNG 且 ≤1MB）并替换 src；封面走永久素材（`material/add_material`，支持 JPG/JPEG/PNG/BMP/GIF 且 ≤10MB）；按接口拆分白名单并校验真实字节格式（魔数嗅探 + Pillow 可用时解码校验，伪图片/后缀与内容不符一律拒绝）；sha256 缓存避免重复上传；`--compress-cover` 可选 Pillow 压缩（AI 生成的封面始终自动压缩）
 - **AI 增强**（可选）：`--ai-summary` 生成摘要（OpenAI 兼容接口，默认 DeepSeek）、`--ai-cover` 生成封面（Gemini，默认模型 `gemini-2.5-flash-image`，通过正式 API 参数 `imageConfig.aspectRatio: 21:9` 控制封面比例，并对返回图片做 MIME 与 Pillow 解码校验）
 - **Mermaid 图表**：`--mermaid` 本地渲染（mmdc，Windows 下自动兼容 `.cmd`）或在线 API（`--mermaid-engine api`），按内容 hash 缓存
 - **健壮性**：重试按幂等性分级（详见下文"错误处理与重试语义"）、45009 限频退避、token 过期（42001）自动刷新重试一次、状态文件原子写、图片上传失败默认中止发布
-- **安全**：本地图片仅允许 markdown 目录 / 项目目录 / build 目录内的路径；`.env` 不入库；token 与 appid 输出均掩码
+- **安全**：本地图片仅允许 markdown 目录 / 项目目录 / build 目录内的路径；远程图片下载默认阻断环回/内网/链路本地/保留网段（SSRF 防护，逐跳校验重定向目标）；`.env` 不入库；token 与 appid 输出均掩码
 
 ## 安装
 
@@ -84,6 +84,23 @@ graph TD
 
 - 默认引擎 `mmdc`：需要 `npm install -g @mermaid-js/mermaid-cli`（Windows 上 npm 的 `.cmd` 垫片已自动处理）
 - `--mermaid-engine api`：无需安装，但图表源码会上传到第三方服务 mermaid.ink，注意隐私
+
+## 远程图片与 SSRF 防护
+
+正文中的 `http(s)://` 图片会在上传前下载到本地临时文件。为防止 SSRF（服务端请求伪造），默认策略：
+
+- 仅接受 `http` / `https` URL；主机名 `localhost`（不区分大小写）一律拒绝
+- 下载前解析目标主机的**全部** IP（含 IP 字面量直判），任一命中环回（127.0.0.0/8、::1）、内网（10/8、172.16/12、192.168/16 等）、链路本地（169.254/16，含云厂商元数据端点 169.254.169.254）、组播/保留/未指定地址即拒绝；DNS 解析失败同样拒绝
+- 重定向不交给 HTTP 库自动跟随：每一跳都重新校验（含 Location 目标），最多 5 跳，重定向进内网会被拦截，且校验发生在发起请求之前
+
+内网环境（如自建图床）确有需要时，在 `config/publish.yaml` 显式放行：
+
+```yaml
+remote_images:
+  allow_private_networks: true   # 默认 false；非布尔值会在配置解析时报错
+```
+
+放行后跳过内网/环回判定，但 scheme 检查（仅 http/https）仍然保留。
 
 ## 产物与状态
 

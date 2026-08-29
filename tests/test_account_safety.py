@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 import responses
+from conftest import make_png
 
 from wechat_publish.cli import main
 from wechat_publish.config import account_key, account_scoped_paths, resolve_config
@@ -75,10 +76,8 @@ class TestAccountIsolation:
     @responses.activate
     def test_switching_appid_never_reuses_account_state(self, tmp_path: Path):
         state_dir = tmp_path / ".wechat_publish"
-        cover = tmp_path / "cover.png"
-        cover.write_bytes(b"\x89PNG" + b"\x00" * 50)
-        fig = tmp_path / "fig1.png"
-        fig.write_bytes(b"\x89PNG" + b"\x00" * 50)
+        cover = make_png(tmp_path / "cover.png")
+        fig = make_png(tmp_path / "fig1.png")
         _mock_wechat_endpoints()
 
         # Account A: token + cover + body image caches under A's namespace
@@ -201,8 +200,7 @@ class TestQuarantineLegacyState:
         (state_dir / "token.json").write_text(
             json.dumps({"access_token": "OLD", "expires_at": 1}), encoding="utf-8"
         )
-        cover = tmp_project / "input" / "cover.png"
-        cover.write_bytes(b"\x89PNG" + b"\x00" * 50)
+        make_png(tmp_project / "input" / "cover.png")
         article = tmp_project / "input" / "article.md"
         article.write_text(
             '---\ntitle: "T"\n---\n\nBody.\n', encoding="utf-8"
@@ -431,8 +429,7 @@ class TestDeprecatedPathsKeys:
             "  cover_cache: custom/cover_cache.json\n",
             encoding="utf-8",
         )
-        cover = tmp_project / "input" / "cover.png"
-        cover.write_bytes(b"\x89PNG" + b"\x00" * 50)
+        make_png(tmp_project / "input" / "cover.png")
         article = tmp_project / "input" / "article.md"
         article.write_text('---\ntitle: "T"\n---\n\nBody.\n', encoding="utf-8")
         _mock_wechat_endpoints()

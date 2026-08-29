@@ -5,6 +5,14 @@ from pathlib import Path
 import pytest
 
 
+def make_png(path: Path) -> Path:
+    """Write a real (Pillow-generated) PNG so tests pass real-format checks."""
+    from PIL import Image
+
+    Image.new("RGB", (4, 4), "red").save(path, "PNG")
+    return path
+
+
 @pytest.fixture
 def tmp_project(tmp_path: Path, monkeypatch) -> Path:
     """A temp directory shaped like a project root, with credentials set.
