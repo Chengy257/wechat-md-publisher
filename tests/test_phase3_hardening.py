@@ -225,7 +225,7 @@ def _mock_wechat_endpoints() -> None:
 
 class TestRemoteSuccessLocalFailure:
     @responses.activate
-    def test_save_post_state_failure_reports_media_id(
+    def test_save_post_snapshot_failure_reports_media_id(
         self, tmp_project: Path, monkeypatch, capsys
     ):
         _setup_article(tmp_project)
@@ -242,10 +242,10 @@ class TestRemoteSuccessLocalFailure:
 
         monkeypatch.setattr(cli, "add_draft", counting_add_draft)
 
-        def failing_save_post_state(*a, **kw):
+        def failing_save_post_snapshot(*a, **kw):
             raise OSError("disk full")
 
-        monkeypatch.setattr(cli, "save_post_state", failing_save_post_state)
+        monkeypatch.setattr(cli, "save_post_snapshot", failing_save_post_snapshot)
 
         rc = main(["draft", "--md", "input/article.md"])
         assert rc != 0
@@ -253,8 +253,8 @@ class TestRemoteSuccessLocalFailure:
         assert "DRAFT_MEDIA_ID_123456" in err
         assert "Do NOT blindly rerun" in err
         assert add_draft_calls["n"] == 1  # add_draft ran exactly once
-        # The state file was not persisted
-        assert list((tmp_project / ".wechat_publish" / "posts").glob("*.json")) == []
+        # No snapshot was persisted
+        assert list((tmp_project / ".wechat_publish" / "posts").glob("*/state.json")) == []
 
     @responses.activate
     def test_token_cache_written_before_failure(
@@ -267,7 +267,7 @@ class TestRemoteSuccessLocalFailure:
         import wechat_publish.cli as cli
 
         monkeypatch.setattr(
-            cli, "save_post_state",
+            cli, "save_post_snapshot",
             lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")),
         )
         assert main(["draft", "--md", "input/article.md"]) != 0

@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 from .errors import check_wechat_response
 from .http import RetryPolicy, json_response, request_with_retry, require_field
-from .state import load_json_mapping, save_json_mapping
+from .state import file_lock, load_json_mapping, save_json_mapping
 
 API_BASE = "https://api.weixin.qq.com"
 
@@ -413,11 +413,13 @@ def upload_cover_image(
     )
     print(f"[INFO] uploaded cover: {path.name} -> media_id={result.media_id[:6]}...")
 
-    # Update cache
+    # Update cache. The load -> modify -> save cycle is serialized across
+    # processes with a file lock so concurrent uploads never lose updates.
     if cache_path is not None:
-        cache = dict(load_json_mapping(cache_path))
-        cache[file_hash] = {"media_id": result.media_id, "url": result.url}
-        save_json_mapping(cache_path, cache)
+        with file_lock(cache_path):
+            cache = dict(load_json_mapping(cache_path))
+            cache[file_hash] = {"media_id": result.media_id, "url": result.url}
+            save_json_mapping(cache_path, cache)
 
     return result
 
@@ -449,11 +451,13 @@ def upload_body_image(
     result = UploadedBodyImage(url=require_field(data, "url", "upload_body_image"))
     print(f"[INFO] uploaded image: {path.name} -> {result.url[:40]}...")
 
-    # Update cache
+    # Update cache. The load -> modify -> save cycle is serialized across
+    # processes with a file lock so concurrent uploads never lose updates.
     if cache_path is not None:
-        cache = dict(load_json_mapping(cache_path))
-        cache[file_hash] = result.url
-        save_json_mapping(cache_path, cache)
+        with file_lock(cache_path):
+            cache = dict(load_json_mapping(cache_path))
+            cache[file_hash] = result.url
+            save_json_mapping(cache_path, cache)
 
     return result
 

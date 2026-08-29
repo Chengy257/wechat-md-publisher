@@ -1,26 +1,19 @@
-"""Local state persistence for tokens, caches, and post records."""
+"""Local state persistence for tokens, caches, and post snapshots."""
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import os
-import re
+import shutil
+import sys
 import tempfile
-from collections.abc import Mapping
-from dataclasses import dataclass
+import uuid
+from collections.abc import Iterator, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
-
-@dataclass(frozen=True)
-class PostState:
-    """Local record for one rendered or drafted article."""
-
-    title: str
-    source_markdown: Path
-    wechat_html: Path
-    draft_media_id: str | None = None
 
 
 def ensure_state_dirs(state_dir: Path) -> None:
@@ -103,30 +96,104 @@ def quarantine_legacy_state(state_dir: Path) -> None:
         )
 
 
-def _slugify(title: str) -> str:
-    """Convert a title to a filesystem-safe slug."""
-    slug = re.sub(r"[^\w\u4e00-\u9fff\u3400-\u4dbf]+", "-", title.strip())
-    slug = slug.strip("-")
-    return slug[:60] if slug else "untitled"
+@contextlib.contextmanager
+def file_lock(path: Path) -> Iterator[None]:
+    """Hold an exclusive cross-platform advisory lock on a sidecar lock file.
+
+    The lock file is ``<path>.lock`` (created on demand). On Windows the
+    region is locked with ``msvcrt.locking`` (``LK_LOCK`` retries internally
+    for ~10 seconds before raising ``OSError``); on POSIX ``fcntl.flock``
+    with ``LOCK_EX`` blocks until the lock is available. The lock is always
+    released and the file descriptor closed in ``finally``.
+
+    Used to serialize load -> modify -> save cycles on shared JSON caches so
+    concurrent processes never lose each other's updates. Readers that only
+    consume an atomically replaced file (via :func:`load_json_mapping`) do
+    not need the lock: they always see either the old or the new complete
+    content.
+    """
+    lock_path = path.parent / (path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            try:
+                if sys.platform == "win32":
+                    import msvcrt
+
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass  # Lock release must never mask the protected operation.
+    finally:
+        os.close(fd)
 
 
-def save_post_state(posts_dir: Path, state: PostState) -> Path:
-    """Save a per-post state file and return its path."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%S")
-    slug = _slugify(state.title)
-    filename = f"{now}-{slug}.json"
-    path = posts_dir / filename
+def save_post_snapshot(
+    posts_dir: Path,
+    *,
+    title: str,
+    appid_hash: str,
+    draft_media_id: str | None,
+    source_markdown_path: Path,
+    final_html: str,
+) -> Path:
+    """Persist an immutable per-publish snapshot and return its state.json.
+
+    Layout (``posts_dir / <snapshot-id>/``)::
+
+        source.md            copy of the original Markdown (bytes)
+        final.wechat.html    final HTML as sent to draft/add (atomic write)
+        state.json           metadata (atomic write)
+
+    The snapshot id is ``<UTC timestamp with microseconds>Z-<uuid8>``, which
+    is collision-free even for identical titles published in the same second
+    and contains no characters that are invalid in Windows file names.
+    """
+    snapshot_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ") + "-" + uuid.uuid4().hex[:8]
+    snapshot_dir = posts_dir / snapshot_id
+    try:
+        snapshot_dir.mkdir(parents=True)
+    except FileExistsError:
+        # Theoretically impossible (uuid suffix); retry once with a fresh id.
+        snapshot_dir = posts_dir / (
+            snapshot_id + "-" + uuid.uuid4().hex[:8]
+        )
+        snapshot_dir.mkdir(parents=True)
+
+    shutil.copyfile(source_markdown_path, snapshot_dir / "source.md")
+    final_html_path = snapshot_dir / "final.wechat.html"
+    _atomic_write_text(final_html_path, final_html)
 
     payload: dict[str, Any] = {
-        "title": state.title,
-        "source_markdown": str(state.source_markdown),
-        "wechat_html": str(state.wechat_html),
+        "title": title,
+        "appid_hash": appid_hash,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        # Hash of the bytes actually on disk (not the in-memory string) so
+        # the snapshot stays verifiable even under Windows text-mode CRLF
+        # translation.
+        "content_sha256": hashlib.sha256(final_html_path.read_bytes()).hexdigest(),
+        "source_markdown": "source.md",
+        "wechat_html": "final.wechat.html",
     }
-    if state.draft_media_id is not None:
-        payload["draft_media_id"] = state.draft_media_id
+    if draft_media_id is not None:
+        payload["draft_media_id"] = draft_media_id
 
+    state_path = snapshot_dir / "state.json"
     _atomic_write_text(
-        path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        state_path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
     )
-    return path
+    return state_path

@@ -15,11 +15,10 @@ from wechat_publish.errors import (
 )
 from wechat_publish.images import sha256_file, validate_body_image, validate_cover_image
 from wechat_publish.state import (
-    PostState,
     ensure_state_dirs,
     load_json_mapping,
     save_json_mapping,
-    save_post_state,
+    save_post_snapshot,
 )
 from wechat_publish.token import load_cached_token, mask_token
 
@@ -217,27 +216,36 @@ class TestStatePersistence:
         result = load_json_mapping(path)
         assert result == {}
 
-    def test_save_post_state(self, tmp_path: Path):
+    def test_save_post_snapshot(self, tmp_path: Path):
         posts_dir = tmp_path / "posts"
-        state = PostState(
+        source = tmp_path / "input" / "test.md"
+        source.parent.mkdir()
+        source.write_text("# test", encoding="utf-8")
+        path = save_post_snapshot(
+            posts_dir,
             title="Test Article",
-            source_markdown=Path("input/test.md"),
-            wechat_html=Path("build/test.wechat.html"),
+            appid_hash="abc123def456",
             draft_media_id="MEDIA_123",
+            source_markdown_path=source,
+            final_html="<p>test</p>",
         )
-        path = save_post_state(posts_dir, state)
         assert path.exists()
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["title"] == "Test Article"
         assert data["draft_media_id"] == "MEDIA_123"
 
-    def test_save_post_state_no_media_id(self, tmp_path: Path):
+    def test_save_post_snapshot_no_media_id(self, tmp_path: Path):
         posts_dir = tmp_path / "posts"
-        state = PostState(
+        source = tmp_path / "input" / "test.md"
+        source.parent.mkdir()
+        source.write_text("# test", encoding="utf-8")
+        path = save_post_snapshot(
+            posts_dir,
             title="Draft Only",
-            source_markdown=Path("input/test.md"),
-            wechat_html=Path("build/test.html"),
+            appid_hash="abc123def456",
+            draft_media_id=None,
+            source_markdown_path=source,
+            final_html="<p>test</p>",
         )
-        path = save_post_state(posts_dir, state)
         data = json.loads(path.read_text(encoding="utf-8"))
         assert "draft_media_id" not in data

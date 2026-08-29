@@ -17,6 +17,7 @@ from .config import (
     BUILTIN_THEMES,
     ArticleMetadata,
     PublisherConfig,
+    account_key,
     account_scoped_paths,
     load_env_values,
     load_publish_config,
@@ -31,10 +32,9 @@ from .html_processor import discover_images, process_article_html
 from .images import compress_cover, process_images, upload_cover_image
 from .render import _wrap_preview, parse_front_matter, render_article, render_markdown_to_html
 from .state import (
-    PostState,
     ensure_state_dirs,
     quarantine_legacy_state,
-    save_post_state,
+    save_post_snapshot,
     write_text_atomic,
 )
 from .token import get_access_token, mask_appid, mask_token
@@ -175,6 +175,10 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Path to Markdown article")
     inspect_p.add_argument("--config", type=Path, default=Path("config/publish.yaml"),
                            help="Path to publish config YAML")
+    inspect_p.add_argument("--title", help="Override article title")
+    inspect_p.add_argument("--author", help="Override article author")
+    inspect_p.add_argument("--digest", help="Override article digest")
+    inspect_p.add_argument("--cover", type=Path, help="Override cover image path")
     inspect_p.add_argument("--style", type=Path, default=None,
                            help="Path to CSS theme file (overrides --theme)")
     inspect_p.add_argument("--theme", default=None, choices=sorted(BUILTIN_THEMES),
@@ -303,52 +307,29 @@ def cmd_render(args: argparse.Namespace) -> int:
 # ── inspect command ─────────────────────────────────────────────
 
 def cmd_inspect(args: argparse.Namespace) -> int:
-    """Inspect resolved metadata and assets."""
-    md_path = args.md
-    if not md_path.exists():
-        print(f"[ERROR] Markdown file not found: {md_path}", file=sys.stderr)
+    """Inspect resolved metadata and assets (offline; writes no files)."""
+    try:
+        # Same render path as draft, but nothing is written to disk and no
+        # mermaid rendering runs (inspect has no --mermaid flag).
+        stage = _render_stage(args, write_outputs=False)
+    except _Abort as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
         return 1
 
-    project = _resolve_project_dir(args)
-    pub_cfg = load_publish_config(project / args.config)
-    style_path = resolve_style_path(
-        style_arg=args.style, theme_arg=args.theme, project_dir=project
-    )
-    theme_css = load_theme_css(style_path)
-    env = load_env_values(project)
-
-    # Parse front matter
-    text = md_path.read_text(encoding="utf-8")
-    front_matter, _ = parse_front_matter(text)
-
-    cli_values = _resolve_cli_values(args)
-    config = resolve_config(
-        cli_values=cli_values,
-        front_matter=front_matter,
-        publish_config=pub_cfg,
-        env=env,
-    )
-
-    article = config.article
+    article = stage.article
     print("=== Resolved Metadata ===")
     print(f"  title:    {article.title or '(empty)'}")
     print(f"  author:   {article.author or '(empty)'}")
     print(f"  digest:   {article.digest or '(empty)'}")
     print(f"  cover:    {article.cover}")
 
-    # Render to discover images
-    _, body = parse_front_matter(text)
-    raw_html = render_markdown_to_html(body)
-    processed = process_article_html(raw_html, theme_css)
-
-    images = discover_images(processed, md_path.parent)
-    print(f"\n=== Images ({len(images)}) ===")
-    for img in images:
+    print(f"\n=== Images ({len(stage.images)}) ===")
+    for img in stage.images:
         location = "remote" if img.is_remote else f"local: {img.resolved_path}"
         print(f"  {img.original_src}  ({location})")
 
     # Show credentials status (masked)
-    appid, _ = resolve_credentials(pub_cfg, env)
+    appid, _ = resolve_credentials(stage.pub_cfg, stage.env)
     if appid:
         print("\n=== Credentials ===")
         print(f"  appid: {mask_appid(appid)}")
@@ -378,8 +359,12 @@ class _DraftStage:
     env: Mapping[str, str | None]
 
 
-def _render_stage(args: argparse.Namespace) -> _DraftStage:
-    """Load, render and adapt the article locally; no network is touched."""
+def _render_stage(args: argparse.Namespace, write_outputs: bool = True) -> _DraftStage:
+    """Load, render and adapt the article locally; no network is touched.
+
+    With ``write_outputs=False`` (the inspect path) nothing is persisted:
+    no build/ directory is created and mermaid rendering is skipped.
+    """
     md_path = args.md
     if not md_path.exists():
         raise _Abort(f"Markdown file not found: {md_path}")
@@ -423,7 +408,7 @@ def _render_stage(args: argparse.Namespace) -> _DraftStage:
     )
 
     article = config.article
-    if not article.title:
+    if write_outputs and not article.title:
         raise _Abort(
             "Article title is required. Use --title, "
             "--autofill-front-matter, or add front matter."
@@ -431,27 +416,30 @@ def _render_stage(args: argparse.Namespace) -> _DraftStage:
 
     raw_html = render_markdown_to_html(body)
     build_dir = config.build_dir
-    build_dir.mkdir(parents=True, exist_ok=True)
-
     preview_path = build_dir / "article.preview.html"
     wechat_path = build_dir / "article.wechat.html"
 
     wechat_html = process_article_html(raw_html, theme_css)
 
-    if getattr(args, "mermaid", False) and not getattr(args, "dry_run", False):
-        from .mermaid import replace_mermaid_blocks
-        mermaid_dir = build_dir / "mermaid"
-        wechat_html = replace_mermaid_blocks(
-            wechat_html, mermaid_dir, engine=args.mermaid_engine,
-            src_base_dir=md_path.parent,
-        )
-    elif getattr(args, "mermaid", False):
-        print("[INFO] dry-run: mermaid rendering skipped (would run on a real publish).")
+    if write_outputs:
+        build_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save preview and WeChat HTML
-    title = str(front_matter.get("title", ""))
-    preview_path.write_text(_wrap_preview(wechat_html, title), encoding="utf-8")
-    wechat_path.write_text(wechat_html, encoding="utf-8")
+        if getattr(args, "mermaid", False) and not getattr(args, "dry_run", False):
+            from .mermaid import replace_mermaid_blocks
+            mermaid_dir = build_dir / "mermaid"
+            wechat_html = replace_mermaid_blocks(
+                wechat_html, mermaid_dir, engine=args.mermaid_engine,
+                src_base_dir=md_path.parent,
+            )
+        elif getattr(args, "mermaid", False):
+            print("[INFO] dry-run: mermaid rendering skipped (would run on a real publish).")
+
+        # Save preview and WeChat HTML. The preview title is the resolved
+        # article title so --title overrides are reflected in the preview.
+        preview_path.write_text(
+            _wrap_preview(wechat_html, article.title), encoding="utf-8"
+        )
+        wechat_path.write_text(wechat_html, encoding="utf-8")
 
     # Discover images (markdown dir, project root and build dir are trusted)
     images = discover_images(
@@ -656,19 +644,20 @@ def _publish_stage(
         lambda tv: add_draft(tv, draft_article),
     )
 
-    state = PostState(
-        title=article.title,
-        source_markdown=stage.md_path,
-        wechat_html=stage.wechat_path,
-        draft_media_id=result.media_id,
-    )
     try:
-        state_path = save_post_state(config.posts_dir, state)
+        state_path = save_post_snapshot(
+            config.posts_dir,
+            title=article.title,
+            appid_hash=account_key(appid),
+            draft_media_id=result.media_id,
+            source_markdown_path=stage.md_path,
+            final_html=wechat_html,
+        )
     except OSError as e:
         # The draft already exists remotely; failing silently (or with a
         # generic error) would invite a blind rerun that duplicates it.
         raise RemoteDraftCreatedLocalStateFailed(result.media_id, str(e)) from e
-    print(f"[OK] state saved: {state_path}")
+    print(f"[OK] snapshot saved: {state_path}")
 
     print("\n[OK] Draft created successfully!")
     print(f"  media_id: {result.media_id}")

@@ -11,7 +11,11 @@ from wechat_publish.draft import DraftArticle, validate_draft_article
 from wechat_publish.errors import WeChatAPIError, WeChatErrorDetail
 from wechat_publish.http import json_response
 from wechat_publish.images import compress_cover, process_images
-from wechat_publish.state import PostState, load_json_mapping, save_json_mapping, save_post_state
+from wechat_publish.state import (
+    load_json_mapping,
+    save_json_mapping,
+    save_post_snapshot,
+)
 from wechat_publish.token import AccessToken
 
 # ── draft field validation ──────────────────────────────────────
@@ -269,13 +273,18 @@ class TestAtomicWrites:
         leftovers = [p for p in tmp_path.iterdir() if p.name != "cache.json"]
         assert leftovers == []
 
-    def test_save_post_state_writes_valid_json(self, tmp_path: Path):
-        state = PostState(
+    def test_save_post_snapshot_writes_valid_json(self, tmp_path: Path):
+        source = tmp_path / "input" / "a.md"
+        source.parent.mkdir()
+        source.write_text("# a", encoding="utf-8")
+        path = save_post_snapshot(
+            tmp_path / "posts",
             title="原子写 Test",
-            source_markdown=Path("input/a.md"),
-            wechat_html=Path("build/a.html"),
+            appid_hash="abc123def456",
+            draft_media_id=None,
+            source_markdown_path=source,
+            final_html="<p>a</p>",
         )
-        path = save_post_state(tmp_path / "posts", state)
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["title"] == "原子写 Test"
 

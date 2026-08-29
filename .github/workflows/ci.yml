@@ -19,21 +19,30 @@ jobs:
         run: ruff check wechat_publish tests
 
   tests:
-    name: Tests
-    runs-on: ubuntu-latest
+    name: Tests (py${{ matrix.python }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python }}
       - name: Install package with dev extras
         run: pip install -e ".[dev]"
       - name: Run pytest
         run: pytest
 
   package-smoke:
-    name: Package smoke (clean wheel)
-    runs-on: ubuntu-latest
+    name: Package smoke (clean wheel / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,6 +57,7 @@ jobs:
       - name: CLI help
         run: wechat-publish --help
       - name: Render smoke test
+        shell: bash
         run: |
           mkdir -p /tmp/smoke
           printf '# Smoke Test\n\nHello.\n' > /tmp/smoke/article.md

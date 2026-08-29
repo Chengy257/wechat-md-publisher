@@ -55,8 +55,11 @@ wechat-publish render --md input/article.md --theme default
 # 在项目根之外运行时显式指定项目根
 wechat-publish render --md ~/blog/article.md --project-dir ~/blog
 
-# 查看解析出的元数据与图片清单
+# 查看解析出的元数据与图片清单（不写盘）
 wechat-publish inspect --md input/article.md
+
+# inspect 同样支持元数据覆盖参数（与 draft 语义一致），用于预检真实发布效果
+wechat-publish inspect --md input/article.md --title "覆盖标题" --author "作者" --digest "摘要" --cover cover.png
 
 # 试运行：完全离线（无需微信凭据与 AI key，零网络请求，AI/mermaid 均跳过并提示）
 wechat-publish draft --md input/article.md --dry-run
@@ -104,11 +107,14 @@ remote_images:
 
 ## 产物与状态
 
-- `build/article.preview.html`：本地预览（含样式外壳）
+- `build/article.preview.html`：本地预览（含样式外壳，标题与实际草稿一致——`--title` 等覆盖参数同样生效）
 - `build/article.wechat.html`：上传后的最终正文（图片已替换为微信 URL）；在 `draft/add` 之前先行原子写盘，保证本地产物先于远端副作用就绪
 - `.wechat_publish/`：本地状态目录（已 gitignore）
-  - `accounts/<account-key>/`：按公众号账号隔离的 `token.json`、`image_cache.json`、`cover_cache.json`（`<account-key>` 为 AppID 的 sha256 前 12 位；切换公众号后各账号状态完全独立，token 与素材缓存绝不跨账号复用）
-  - `posts/`：发布记录
+  - `accounts/<account-key>/`：按公众号账号隔离的 `token.json`、`image_cache.json`、`cover_cache.json`（`<account-key>` 为 AppID 的 sha256 前 12 位；切换公众号后各账号状态完全独立，token 与素材缓存绝不跨账号复用；缓存读改写由跨平台文件锁保护，并行发布不会互相丢失更新）
+  - `posts/<id>/`：每次成功发布产生的**不可变发布快照**（`<id>` 为 UTC 时间戳（微秒）+ uuid，同秒同标题也不会碰撞）：
+    - `state.json`：元数据（title、appid_hash、draft_media_id、created_at、content_sha256 等）
+    - `final.wechat.html`：当次发给 `draft/add` 的最终正文，可随时复核发布时的真实内容
+    - `source.md`：当次文章源文件的字节副本
   - `legacy/`：升级前 v0.1.1 的旧缓存文件会被自动移入此处，不读取也不复用（token 重新获取、缓存重建）
   - 注意：token 为明文 access_token，不要分享该目录
 

@@ -87,11 +87,16 @@ class TestFullDraftFlow:
         )
         assert "https://mmbiz.qpic.cn/fig1.png" in html
 
-        # State was persisted
-        posts = list((tmp_project / ".wechat_publish" / "posts").glob("*.json"))
-        assert len(posts) == 1
-        state = json.loads(posts[0].read_text(encoding="utf-8"))
+        # An immutable snapshot was persisted under a unique directory
+        snapshots = sorted(
+            (tmp_project / ".wechat_publish" / "posts").glob("*/state.json")
+        )
+        assert len(snapshots) == 1
+        state = json.loads(snapshots[0].read_text(encoding="utf-8"))
         assert state["draft_media_id"] == "DRAFT_MEDIA_ID_123456"
+        snapshot_dir = snapshots[0].parent
+        assert (snapshot_dir / "final.wechat.html").exists()
+        assert (snapshot_dir / "source.md").exists()
 
         # Token was cached for reuse (account-scoped, bound to the appid)
         token_cache = json.loads(
