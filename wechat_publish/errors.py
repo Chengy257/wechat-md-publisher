@@ -139,7 +139,7 @@ def hint_for_error(operation: str, errcode: int | None, errmsg: str | None) -> s
         parts.append("请在公众号后台 → 设置与开发 → 基本配置中添加本机 IP 到白名单。")
 
     if "access_token" in errmsg_lower and errcode not in (40001, 42001):
-        parts.append("尝试删除 .wechat_publish/token.json 后重试。")
+        parts.append("尝试删除对应账号的 .wechat_publish/accounts/<account-key>/token.json 后重试。")
 
     if not parts:
         parts.append(f"未知错误，请查阅微信官方文档（errcode={errcode}）。")

@@ -37,6 +37,8 @@ def load_cached_token(path: Path, expected_appid: str | None = None) -> AccessTo
     try:
         text = path.read_text(encoding="utf-8")
         data = json.loads(text)
+        if not isinstance(data, dict):
+            return None
         if expected_appid is not None and data.get("appid") != expected_appid:
             return None
         value = data.get("access_token", "")

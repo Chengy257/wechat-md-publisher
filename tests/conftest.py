@@ -17,7 +17,7 @@ def make_png(path: Path) -> Path:
 def tmp_project(tmp_path: Path, monkeypatch) -> Path:
     """A temp directory shaped like a project root, with credentials set.
 
-    Contains ``config/`` (so _project_dir() resolves to it), an
+    Contains ``config/`` (so _discover_project_dir() resolves to it), an
     ``input/article.md`` with front matter, and WECHAT_APPID/SECRET env vars.
     """
     (tmp_path / "config").mkdir()

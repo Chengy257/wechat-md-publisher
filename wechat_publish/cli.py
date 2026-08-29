@@ -187,14 +187,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _project_dir() -> Path:
-    """Return the project root directory (where config/ and input/ live)."""
-    cwd = Path.cwd()
-    if (cwd / "config").is_dir():
-        return cwd
-    return Path(__file__).resolve().parent.parent
-
-
 def _resolve_cli_values(args: argparse.Namespace) -> dict[str, Any]:
     """Extract CLI override values from parsed args."""
     values: dict[str, Any] = {}
@@ -640,7 +632,7 @@ def _publish_stage(
     write_text_atomic(stage.wechat_path, wechat_html)
 
     result = _run_with_token_retry(
-        token, appid, appsecret, config.token_cache,
+        token, appid, appsecret, token_cache,
         lambda tv: add_draft(tv, draft_article),
     )
 

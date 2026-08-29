@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import os
 import socket
 import tempfile
 from dataclasses import dataclass
@@ -287,6 +288,7 @@ def _resolve_image_to_file(
 
     suffix = _url_to_suffix(ref_src)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    current = Path(tmp.name)
     try:
         downloaded = 0
         for chunk in resp.iter_content(chunk_size=_DOWNLOAD_CHUNK):
@@ -298,10 +300,23 @@ def _resolve_image_to_file(
                 )
             tmp.write(chunk)
         tmp.close()
-        return Path(tmp.name), True
+        # The URL-based suffix is a guess: many image hosts (mmbiz, signed
+        # OSS URLs, ...) serve images from extension-less URLs. Sniff the
+        # real format from the downloaded bytes and rename the temp file to
+        # match, so downstream same-family validation does not wrongly
+        # reject a legit JPEG stored as ".png". Unknown formats keep the
+        # original suffix so validation rejects them with a clear error.
+        with open(current, "rb") as f:
+            header = f.read(16)
+        sniffed = _sniff_format(header)
+        if sniffed is not None and sniffed != suffix and sniffed in _BODY_EXTENSIONS:
+            corrected = current.with_suffix(sniffed)
+            os.replace(current, corrected)
+            current = corrected
+        return current, True
     except Exception:
         tmp.close()
-        Path(tmp.name).unlink(missing_ok=True)
+        current.unlink(missing_ok=True)
         raise
 
 
