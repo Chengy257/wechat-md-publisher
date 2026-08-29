@@ -22,7 +22,7 @@ pip install -e ".[cover-compress]"  # 含 Pillow（--compress-cover 需要）
 
 ## 配置
 
-1. 复制 `config/publish.example.yaml` 为 `config/publish.yaml`，按需调整（代码会带警告忽略未知配置键）
+1. 复制 `config/publish.example.yaml` 为 `config/publish.yaml`，按需调整（代码会带警告忽略未知配置键）。注意：`paths.token_cache / image_cache / cover_cache` 自 v0.1.1 起已废弃（仍可解析但不再生效，会打印警告）——token 与素材缓存现在按公众号账号隔离存放在 `.wechat_publish/accounts/<account-key>/` 下；`paths.build_dir / state_dir / posts_dir` 不受影响
 2. 在项目根创建 `.env`（已被 .gitignore 忽略）：
 
 ```dotenv
@@ -46,7 +46,7 @@ wechat-publish render --md input/article.md --theme default
 # 查看解析出的元数据与图片清单
 wechat-publish inspect --md input/article.md
 
-# 试运行：完整流程但不发任何网络请求（AI 调用也会跳过）
+# 试运行：完全离线（无需微信凭据与 AI key，零网络请求，AI/mermaid 均跳过并提示）
 wechat-publish draft --md input/article.md --dry-run
 
 # 创建草稿
@@ -77,7 +77,11 @@ graph TD
 
 - `build/article.preview.html`：本地预览（含样式外壳）
 - `build/article.wechat.html`：上传后的最终正文（图片已替换为微信 URL）
-- `.wechat_publish/`：token 缓存、图片/封面缓存、`posts/` 发布记录（目录已 gitignore；token 为明文 access_token，注意不要分享该目录）
+- `.wechat_publish/`：本地状态目录（已 gitignore）
+  - `accounts/<account-key>/`：按公众号账号隔离的 `token.json`、`image_cache.json`、`cover_cache.json`（`<account-key>` 为 AppID 的 sha256 前 12 位；切换公众号后各账号状态完全独立，token 与素材缓存绝不跨账号复用）
+  - `posts/`：发布记录
+  - `legacy/`：升级前 v0.1.1 的旧缓存文件会被自动移入此处，不读取也不复用（token 重新获取、缓存重建）
+  - 注意：token 为明文 access_token，不要分享该目录
 
 ## 开发
 

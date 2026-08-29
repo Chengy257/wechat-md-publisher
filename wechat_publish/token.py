@@ -25,13 +25,20 @@ class AccessToken:
     expires_at: int
 
 
-def load_cached_token(path: Path) -> AccessToken | None:
-    """Load a cached token if present and still usable."""
+def load_cached_token(path: Path, expected_appid: str | None = None) -> AccessToken | None:
+    """Load a cached token if present, still usable, and bound to *expected_appid*.
+
+    The cache stores the appid it was issued for; a mismatch (or a missing
+    appid, i.e. a legacy pre-v0.1.1 cache) is treated as a cache miss so a
+    token is never reused across accounts.
+    """
     if not path.exists():
         return None
     try:
         text = path.read_text(encoding="utf-8")
         data = json.loads(text)
+        if expected_appid is not None and data.get("appid") != expected_appid:
+            return None
         value = data.get("access_token", "")
         expires_at = data.get("expires_at", 0)
         if not value or not isinstance(expires_at, (int, float)):
@@ -58,11 +65,15 @@ def request_access_token(appid: str, appsecret: str) -> AccessToken:
     return AccessToken(value=token_value, expires_at=expires_at)
 
 
-def _save_token(path: Path, token: AccessToken) -> None:
-    """Persist a token to disk (atomically)."""
+def _save_token(path: Path, token: AccessToken, appid: str) -> None:
+    """Persist a token to disk (atomically), bound to its appid."""
     save_json_mapping(
         path,
-        {"access_token": token.value, "expires_at": token.expires_at},
+        {
+            "appid": appid,
+            "access_token": token.value,
+            "expires_at": token.expires_at,
+        },
     )
 
 
@@ -79,14 +90,14 @@ def get_access_token(
     """
     now = int(time.time())
     if not force_refresh:
-        cached = load_cached_token(cache_path)
+        cached = load_cached_token(cache_path, expected_appid=appid)
         if cached and cached.expires_at > now + _REFRESH_MARGIN:
             remaining = cached.expires_at - now
             print(f"[INFO] access_token loaded from cache, expires in {remaining}s")
             return cached
 
     token = request_access_token(appid, appsecret)
-    _save_token(cache_path, token)
+    _save_token(cache_path, token, appid)
     print(f"[INFO] access_token refreshed, expires in {token.expires_at - now}s")
     return token
 

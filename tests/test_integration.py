@@ -1,5 +1,6 @@
 """End-to-end integration tests: full draft flow against mocked WeChat APIs."""
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -10,6 +11,12 @@ from wechat_publish.http import request_with_retry
 from wechat_publish.token import get_access_token
 
 _WX = "https://api.weixin.qq.com"
+
+
+def _token_cache_path(tmp_project: Path) -> Path:
+    """Account-scoped token cache path for the test appid."""
+    key = hashlib.sha256(b"wx_test_appid").hexdigest()[:12]
+    return tmp_project / ".wechat_publish" / "accounts" / key / "token.json"
 
 
 def _setup_article(tmp_project: Path) -> None:
@@ -87,22 +94,25 @@ class TestFullDraftFlow:
         state = json.loads(posts[0].read_text(encoding="utf-8"))
         assert state["draft_media_id"] == "DRAFT_MEDIA_ID_123456"
 
-        # Token was cached for reuse
+        # Token was cached for reuse (account-scoped, bound to the appid)
         token_cache = json.loads(
-            (tmp_project / ".wechat_publish" / "token.json").read_text(
-                encoding="utf-8"
-            )
+            _token_cache_path(tmp_project).read_text(encoding="utf-8")
         )
         assert token_cache["access_token"] == "TK" * 30
+        assert token_cache["appid"] == "wx_test_appid"
 
     @responses.activate
     def test_expired_token_midrun_recovers(self, tmp_project: Path, monkeypatch):
         _setup_article(tmp_project)
-        # Pre-seed a token cache that is still valid but will be rejected
-        cache = tmp_project / ".wechat_publish" / "token.json"
+        # Pre-seed an account-scoped token cache that is valid but will be rejected
+        cache = _token_cache_path(tmp_project)
         cache.parent.mkdir(parents=True)
         cache.write_text(
-            json.dumps({"access_token": "STALE" * 8, "expires_at": 2**31}),
+            json.dumps({
+                "appid": "wx_test_appid",
+                "access_token": "STALE" * 8,
+                "expires_at": 2**31,
+            }),
             encoding="utf-8",
         )
 
@@ -169,13 +179,22 @@ class TestHttpRetry:
 
 
 class TestTokenCache:
+    @staticmethod
+    def _write_cache(cache: Path, token_value: str) -> None:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(
+            json.dumps({
+                "appid": "appid",
+                "access_token": token_value,
+                "expires_at": 2**31,
+            }),
+            encoding="utf-8",
+        )
+
     @responses.activate
     def test_valid_cache_used_without_request(self, tmp_path: Path):
         cache = tmp_path / "token.json"
-        cache.write_text(
-            json.dumps({"access_token": "CACHED" * 8, "expires_at": 2**31}),
-            encoding="utf-8",
-        )
+        self._write_cache(cache, "CACHED" * 8)
         token = get_access_token("appid", "secret", cache)
         assert token.value == "CACHED" * 8
         assert len(responses.calls) == 0
@@ -183,10 +202,7 @@ class TestTokenCache:
     @responses.activate
     def test_force_refresh_bypasses_valid_cache(self, tmp_path: Path):
         cache = tmp_path / "token.json"
-        cache.write_text(
-            json.dumps({"access_token": "CACHED" * 8, "expires_at": 2**31}),
-            encoding="utf-8",
-        )
+        self._write_cache(cache, "CACHED" * 8)
         responses.add(
             responses.GET,
             f"{_WX}/cgi-bin/token",

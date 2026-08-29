@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from collections.abc import Mapping
@@ -43,6 +44,29 @@ class PublisherConfig:
 _APPID_ENVS = ("WECHAT_APPID", "WECHAT_APP_ID")
 _APPSECRET_ENVS = ("WECHAT_APPSECRET", "WECHAT_APP_SECRET")
 _AUTHOR_ENVS = ("WECHAT_DEFAULT_AUTHOR", "WECHAT_AUTHOR")
+
+# Per-account state files that are deprecated as explicit config keys since
+# v0.1.1: they are now always account-scoped under <state_dir>/accounts/.
+_DEPRECATED_CACHE_KEYS = ("token_cache", "image_cache", "cover_cache")
+
+
+def account_key(appid: str) -> str:
+    """Return the filesystem-safe account namespace key for an appid."""
+    return hashlib.sha256(appid.encode("utf-8")).hexdigest()[:12]
+
+
+def account_scoped_paths(state_dir: Path, appid: str) -> tuple[Path, Path, Path]:
+    """Return (token_cache, image_cache, cover_cache) scoped to one account.
+
+    Each account gets its own directory under ``<state_dir>/accounts/`` so
+    tokens and uploaded-material caches are never reused across accounts.
+    """
+    scoped_dir = state_dir / "accounts" / account_key(appid)
+    return (
+        scoped_dir / "token.json",
+        scoped_dir / "image_cache.json",
+        scoped_dir / "cover_cache.json",
+    )
 
 
 def _first_env(env: Mapping[str, str | None], keys: tuple[str, ...]) -> str | None:
@@ -224,6 +248,17 @@ def resolve_config(
 
     build_dir = _anchor(paths_cfg.get("build_dir", "build"))
     state_dir = _anchor(paths_cfg.get("state_dir", ".wechat_publish"))
+
+    # Deprecated keys are still parsed (fields stay populated) but the publish
+    # stage now always uses account-scoped cache paths; warn so configs get fixed.
+    for key in _DEPRECATED_CACHE_KEYS:
+        if key in paths_cfg:
+            print(
+                f"[WARN] paths.{key} is deprecated since v0.1.1; token/image/cover "
+                f"caches are account-scoped under {state_dir}/accounts/<account_key>/",
+                file=sys.stderr,
+            )
+
     token_cache = _anchor(paths_cfg["token_cache"]) if "token_cache" in paths_cfg else state_dir / "token.json"
     image_cache = _anchor(paths_cfg["image_cache"]) if "image_cache" in paths_cfg else state_dir / "image_cache.json"
     cover_cache = _anchor(paths_cfg["cover_cache"]) if "cover_cache" in paths_cfg else state_dir / "cover_cache.json"

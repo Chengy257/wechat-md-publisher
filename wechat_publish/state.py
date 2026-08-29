@@ -67,6 +67,32 @@ def save_json_mapping(path: Path, data: Mapping[str, Any]) -> None:
     )
 
 
+# Legacy (pre-v0.1.1) state files that used to live directly under state_dir.
+_LEGACY_STATE_FILES = ("token.json", "image_cache.json", "cover_cache.json")
+
+
+def quarantine_legacy_state(state_dir: Path) -> None:
+    """Move legacy pre-v0.1.1 cache files into ``<state_dir>/legacy/``.
+
+    Legacy files are never read or reused (they are not account-scoped); they
+    are only moved aside so the new account-scoped layout can take over. The
+    operation is idempotent and a no-op when no legacy files exist.
+    """
+    moved: list[str] = []
+    legacy_dir = state_dir / "legacy"
+    for name in _LEGACY_STATE_FILES:
+        src = state_dir / name
+        if src.is_file():
+            legacy_dir.mkdir(parents=True, exist_ok=True)
+            os.replace(src, legacy_dir / name)
+            moved.append(name)
+    if moved:
+        print(
+            f"[WARN] legacy pre-v0.1.1 state moved to {legacy_dir}; "
+            f"token will be re-acquired and caches rebuilt."
+        )
+
+
 def _slugify(title: str) -> str:
     """Convert a title to a filesystem-safe slug."""
     slug = re.sub(r"[^\w\u4e00-\u9fff\u3400-\u4dbf]+", "-", title.strip())

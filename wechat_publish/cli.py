@@ -17,6 +17,7 @@ from .config import (
     BUILTIN_THEMES,
     ArticleMetadata,
     PublisherConfig,
+    account_scoped_paths,
     load_env_values,
     load_publish_config,
     load_theme_css,
@@ -24,12 +25,12 @@ from .config import (
     resolve_credentials,
     resolve_style_path,
 )
-from .draft import DraftArticle, add_draft, build_draft_payload
+from .draft import DraftArticle, add_draft, build_draft_payload, validate_publish_preflight
 from .errors import WeChatAPIError
 from .html_processor import discover_images, process_article_html
 from .images import compress_cover, process_images, upload_cover_image
 from .render import _wrap_preview, parse_front_matter, render_article, render_markdown_to_html
-from .state import PostState, ensure_state_dirs, save_post_state
+from .state import PostState, ensure_state_dirs, quarantine_legacy_state, save_post_state
 from .token import get_access_token, mask_appid, mask_token
 
 _T = TypeVar("_T")
@@ -364,13 +365,15 @@ def _render_stage(args: argparse.Namespace) -> _DraftStage:
 
     wechat_html = process_article_html(raw_html, theme_css)
 
-    if getattr(args, "mermaid", False):
+    if getattr(args, "mermaid", False) and not getattr(args, "dry_run", False):
         from .mermaid import replace_mermaid_blocks
         mermaid_dir = build_dir / "mermaid"
         wechat_html = replace_mermaid_blocks(
             wechat_html, mermaid_dir, engine=args.mermaid_engine,
             src_base_dir=md_path.parent,
         )
+    elif getattr(args, "mermaid", False):
+        print("[INFO] dry-run: mermaid rendering skipped (would run on a real publish).")
 
     # Save preview and WeChat HTML
     title = str(front_matter.get("title", ""))
@@ -413,12 +416,17 @@ def _print_dry_run(stage: _DraftStage, appid: str, args: argparse.Namespace) -> 
     )
     if not cover_check.exists():
         cover_display += "   [MISSING]"
+    cover_note = (
+        "  (AI cover would be generated on a real run)"
+        if getattr(args, "ai_cover", False) and not cover_check.exists()
+        else ""
+    )
 
     print("=== DRY RUN ===")
     print(f"  title:    {article.title}")
     print(f"  author:   {article.author}")
     print(f"  digest:   {article.digest or '(empty)'}{digest_note}")
-    print(f"  cover:    {cover_display}")
+    print(f"  cover:    {cover_display}{cover_note}")
     print(f"  images:   {len(stage.images)}")
     for img in stage.images:
         print(f"            {img.original_src}")
@@ -513,25 +521,35 @@ def _publish_stage(
     config = stage.config
     ensure_state_dirs(config.state_dir)
 
+    # Move any legacy pre-v0.1.1 caches aside (never read/reused) before the
+    # account-scoped layout is used.
+    quarantine_legacy_state(config.state_dir)
+
+    # All account-scoped state (token + material caches) lives under
+    # accounts/<account-key>/ so switching accounts never reuses old state.
+    token_cache, image_cache, cover_cache = account_scoped_paths(
+        config.state_dir, appid
+    )
+
     article = _generate_digest_if_requested(
         args, stage, stage.body, stage.article
     )
 
-    token = get_access_token(appid, appsecret, config.token_cache)
+    token = get_access_token(appid, appsecret, token_cache)
     print(f"[INFO] token: {mask_token(token.value)}")
 
     cover = _prepare_cover(args, stage, article)
 
     cover_result = _run_with_token_retry(
-        token, appid, appsecret, config.token_cache,
-        lambda tv: upload_cover_image(tv, cover, config.cover_cache),
+        token, appid, appsecret, token_cache,
+        lambda tv: upload_cover_image(tv, cover, cover_cache),
     )
 
     wechat_html = _run_with_token_retry(
-        token, appid, appsecret, config.token_cache,
+        token, appid, appsecret, token_cache,
         lambda tv: process_images(
             tv, stage.wechat_html, stage.images, stage.md_path.parent,
-            config.image_cache,
+            image_cache,
             allow_missing=getattr(args, "allow_missing_images", False),
         ),
     )
@@ -578,14 +596,31 @@ def cmd_draft(args: argparse.Namespace) -> int:
         return 1
 
     appid, appsecret = resolve_credentials(stage.pub_cfg, stage.env)
+
+    # Dry-run mode: fully offline -- no credentials, no token, no AI, no network.
+    if args.dry_run:
+        _print_dry_run(stage, appid, args)
+        return 0
+
     if not appid or not appsecret:
         print("[ERROR] WECHAT_APPID and WECHAT_APPSECRET must be set.", file=sys.stderr)
         return 1
 
-    # Dry-run mode: everything so far is local; nothing below touches the network
-    if args.dry_run:
-        _print_dry_run(stage, appid, args)
-        return 0
+    # Preflight: fail fast on locally-detectable problems before any upload.
+    cover_path = None
+    if not getattr(args, "ai_cover", False):
+        cover = stage.article.cover
+        cover_path = cover if cover.is_absolute() else stage.project / cover
+    validate_publish_preflight(
+        title=stage.article.title,
+        author=stage.article.author,
+        digest=stage.article.digest,
+        need_open_comment=stage.article.need_open_comment,
+        only_fans_can_comment=stage.article.only_fans_can_comment,
+        content_source_url=stage.article.source_url,
+        html_chars=len(stage.wechat_html),
+        cover_path=cover_path,
+    )
 
     return _publish_stage(args, stage, appid, appsecret)
 

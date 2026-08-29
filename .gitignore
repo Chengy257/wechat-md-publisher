@@ -1,6 +1,7 @@
 # secrets & runtime state
 .env
 .wechat_publish/
+config/publish.yaml
 
 # build & tooling artifacts
 build/
