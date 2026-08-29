@@ -59,8 +59,6 @@
 /* 段落 */
 .wechat-content p {
   margin: 1.2em 0;
-  letter-spacing: 0.1em;
-  color: #3e3e3e;
   text-align: justify;
   text-justify: inter-ideograph;
 }

@@ -89,15 +89,42 @@ def _build_highlight(style_name: str):
         """Highlight code using Pygments with inline color styles.
 
         The ``attrs`` argument is part of markdown-it's highlight callback
-        contract but is intentionally unused here.
+        contract but is intentionally unused here. The output is compacted
+        because pygments markup is verbose: whitespace-only spans are
+        dropped, adjacent same-style spans merged, and style declarations
+        compacted -- content near the WeChat 20k-char limit needs the
+        savings.
         """
         try:
             lexer = get_lexer_by_name(lang or "text")
         except Exception:
             lexer = TextLexer()
-        return highlight(code, lexer, formatter)
+        return _compact_highlight_spans(highlight(code, lexer, formatter))
 
     return _pygments_highlight
+
+
+_SPAN_RE = re.compile(r'<span style="([^"]*)">([^<]*)</span>')
+_ADJACENT_SPAN_RE = re.compile(
+    r'<span style="([^"]*)">([^<]*)</span><span style="\1">([^<]*)</span>'
+)
+
+
+def _compact_highlight_spans(html: str) -> str:
+    """Minimize pygments span markup while keeping every visible style."""
+    html = _SPAN_RE.sub(
+        lambda m: m.group(2) if not m.group(2).strip() else
+        f'<span style="{m.group(1).replace(": ", ":").lower()}">{m.group(2)}</span>',
+        html,
+    )
+    previous = None
+    while previous != html:
+        previous = html
+        html = _ADJACENT_SPAN_RE.sub(
+            lambda m: f'<span style="{m.group(1)}">{m.group(2)}{m.group(3)}</span>',
+            html,
+        )
+    return html
 
 
 def render_markdown_to_html(
