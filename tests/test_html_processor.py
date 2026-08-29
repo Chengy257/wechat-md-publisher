@@ -298,3 +298,43 @@ class TestCodeBlockWhitespacePreservesMarkup:
         result = make_wechat_compatible(html)
         assert "\n" in result
         assert "<br" not in result
+
+
+class TestWideTableCards:
+    def _table(self, cols, rows):
+        head = "".join(f"<th>列{i}</th>" for i in range(cols))
+        body = "".join(
+            "<tr>" + "".join(f"<td>r{r}c{c}</td>" for c in range(cols)) + "</tr>"
+            for r in range(rows)
+        )
+        return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+    def test_wide_table_becomes_cards(self):
+        result = make_wechat_compatible(self._table(6, 3))
+        assert "<table" not in result
+        assert result.count('class="table-card"') == 3
+        assert 'class="table-card-title"' in result
+        # first column becomes the card title, remaining become key rows
+        assert result.count('class="table-card-row"') == 3 * 5
+        assert ">列5</span>" in result
+
+    def test_narrow_table_untouched(self):
+        html = self._table(3, 4)
+        result = make_wechat_compatible(html)
+        assert "<table" in result
+        assert "table-card" not in result
+
+    def test_empty_cells_skipped_and_inline_markup_kept(self):
+        html = (
+            "<table><thead><tr>"
+            + "".join(f"<th>列{i}</th>" for i in range(5))
+            + "</tr></thead><tbody>"
+            "<tr><td><strong>格式A</strong></td><td>值1</td><td></td>"
+            "<td><code>x=1</code></td><td>值3</td></tr>"
+            "</tbody></table>"
+        )
+        result = make_wechat_compatible(html)
+        assert "<table" not in result
+        assert "<strong>格式A</strong>" in result
+        assert "<code>x=1</code>" in result
+        assert ">列2</span>" not in result  # empty cell skipped

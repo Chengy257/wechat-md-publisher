@@ -136,14 +136,13 @@
   border-collapse: collapse;
   width: 100%;
   margin-bottom: 16px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .wechat-content th,
 .wechat-content td {
   border: 1px solid #bdc3c7;
-  padding: 8px 12px;
-  white-space: nowrap;
+  padding: 5px 8px;
 }
 
 .wechat-content th {
@@ -200,4 +199,37 @@
 
 .footnote-url {
   color: #2980b9;
+}
+
+/* 宽表卡片（≥5 列的表格自动转换为卡片流） */
+.table-cards {
+  margin-bottom: 16px;
+}
+
+.table-card {
+  border: 1px solid #b8d8e8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #e8f4f8;
+}
+
+.table-card-title {
+  margin: 0 0 6px;
+  font-weight: bold;
+  font-size: 15px;
+  color: #2980b9;
+}
+
+.table-card-row {
+  margin: 3px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: justify;
+}
+
+.table-card-key {
+  color: #2980b9;
+  font-weight: bold;
+  margin-right: 6px;
 }

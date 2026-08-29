@@ -131,14 +131,66 @@ def make_wechat_compatible(html: str) -> str:
     """Apply compatibility transforms for the WeChat rich-text backend.
 
     Converts fragile structures (code block whitespace, native lists) into
-    explicit inline content that WeChat preserves reliably.
+    explicit inline content that WeChat preserves reliably. Wide tables are
+    converted to stacked cards: a 5+-column table cannot fit a phone-width
+    WeChat article view.
     """
     soup = BeautifulSoup(html, "html.parser")
     _normalize_code_blocks(soup)
     _flatten_lists(soup)
+    _convert_wide_tables(soup)
     _stripe_tables(soup)
     _convert_headings(soup)
     return str(soup)
+
+
+# Tables with at least this many columns become stacked cards (phone-width
+# views cannot show more columns readably, and WeChat clips overflow).
+_WIDE_TABLE_MIN_COLUMNS = 5
+
+
+def _convert_wide_tables(soup: BeautifulSoup) -> None:
+    """Turn wide tables into per-row card sections.
+
+    Each row becomes a ``section.table-card``: the first cell is the card
+    title, and every remaining cell becomes a ``<p class="table-card-row">``
+    with the column header as a ``span.table-card-key`` label. Inline markup
+    inside cells (links, code spans, strong) is preserved.
+    """
+    for table in soup.find_all("table"):
+        header_cells = table.find_all("th")
+        if len(header_cells) < _WIDE_TABLE_MIN_COLUMNS:
+            continue
+        keys = [cell.get_text(strip=True) for cell in header_cells]
+        body_rows = table.find("tbody")
+        rows = body_rows.find_all("tr", recursive=False) if body_rows else table.find_all("tr")
+
+        cards: list[Tag] = []
+        for row in rows:
+            cells = row.find_all(["td", "th"], recursive=False)
+            if not cells:
+                continue
+            card = soup.new_tag("section", attrs={"class": "table-card"})
+            title = soup.new_tag("p", attrs={"class": "table-card-title"})
+            title.extend(cells[0].contents)
+            card.append(title)
+            for key, cell in zip(keys[1:], cells[1:], strict=False):
+                if not cell.get_text(strip=True):
+                    continue
+                line = soup.new_tag("p", attrs={"class": "table-card-row"})
+                key_span = soup.new_tag("span", attrs={"class": "table-card-key"})
+                key_span.string = key
+                line.append(key_span)
+                line.extend(cell.contents)
+                card.append(line)
+            cards.append(card)
+
+        if not cards:
+            continue
+        container = soup.new_tag("section", attrs={"class": "table-cards"})
+        for card in cards:
+            container.append(card)
+        table.replace_with(container)
 
 
 def inline_css(html: str, css: str) -> str:
