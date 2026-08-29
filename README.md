@@ -15,14 +15,23 @@
 ## 安装
 
 ```bash
-pip install -e .            # 基础安装
-pip install -e ".[dev]"     # 含 pytest / responses
-pip install -e ".[cover-compress]"  # 含 Pillow（--compress-cover 需要）
+pip install -e .            # 基础安装（运行时依赖齐全，pip 装完即用）
+pip install -e ".[dev]"     # 含 pytest / responses / ruff / Pillow，装完可直接跑 pytest
+pip install -e ".[cover-compress]"  # 仅 Pillow（--compress-cover 需要）
 ```
+
+## 项目根与 `--project-dir`
+
+三个子命令（`render / draft / inspect`）都支持 `--project-dir`，用于显式指定项目根（`config/`、`.env` 与输出路径的锚点目录）。未指定时按以下优先级自动解析：
+
+1. 显式 `--project-dir`（最高优先级）
+2. 显式 `--config` 所在目录（若在 `config/` 下则取其上一级）
+3. 从当前目录向上最多 8 级搜索：命中含 `config/publish.yaml`、`config/publish.example.yaml` 或 `.git/` 的目录；含 `pyproject.toml` 时仅当其 `name = "wechat-md-publisher"` 才算命中
+4. 都找不到时回退为当前目录（绝不回退到 site-packages）
 
 ## 配置
 
-1. 复制 `config/publish.example.yaml` 为 `config/publish.yaml`，按需调整（代码会带警告忽略未知配置键）。注意：`paths.token_cache / image_cache / cover_cache` 自 v0.1.1 起已废弃（仍可解析但不再生效，会打印警告）——token 与素材缓存现在按公众号账号隔离存放在 `.wechat_publish/accounts/<account-key>/` 下；`paths.build_dir / state_dir / posts_dir` 不受影响
+1. 复制 `config/publish.example.yaml` 为 `config/publish.yaml`，按需调整（代码会带警告忽略未知配置键）。示例文件仅作文档参考，运行时**不会**读取：缺少 `config/publish.yaml` 时使用内置默认值并打印 INFO 提示。注意：`paths.token_cache / image_cache / cover_cache` 自 v0.1.1 起已废弃（仍可解析但不再生效，会打印警告）——token 与素材缓存现在按公众号账号隔离存放在 `.wechat_publish/accounts/<account-key>/` 下；`paths.build_dir / state_dir / posts_dir` 不受影响
 2. 在项目根创建 `.env`（已被 .gitignore 忽略）：
 
 ```dotenv
@@ -42,6 +51,9 @@ GEMINI_API_KEY=Gemini的key
 ```bash
 # 预览渲染结果（不联网）
 wechat-publish render --md input/article.md --theme default
+
+# 在项目根之外运行时显式指定项目根
+wechat-publish render --md ~/blog/article.md --project-dir ~/blog
 
 # 查看解析出的元数据与图片清单
 wechat-publish inspect --md input/article.md

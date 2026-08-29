@@ -35,9 +35,67 @@ from .token import get_access_token, mask_appid, mask_token
 
 _T = TypeVar("_T")
 
+# Default --config value; used to detect whether --config was passed explicitly.
+_DEFAULT_CONFIG = Path("config/publish.yaml")
+
+# pyproject.toml name marker used to recognize this project's root directory.
+_PROJECT_NAME_MARKER = 'name = "wechat-md-publisher"'
+
 
 class _Abort(RuntimeError):
     """Internal: abort the current command with a user-facing message."""
+
+
+def _discover_project_dir(start: Path) -> Path:
+    """Walk upward from *start* looking for project-root markers.
+
+    A directory counts as the project root when it contains
+    ``config/publish.yaml``, ``config/publish.example.yaml`` or ``.git/``;
+    a ``pyproject.toml`` only counts when its ``name`` is
+    ``wechat-md-publisher`` (so arbitrary Python package directories are
+    not mistaken for a project). At most 8 levels (including *start*)
+    are examined; the fallback is *start* itself — never site-packages.
+    """
+    current = start.resolve()
+    for _ in range(8):
+        if (
+            (current / "config" / "publish.yaml").exists()
+            or (current / "config" / "publish.example.yaml").exists()
+            or (current / ".git").exists()
+        ):
+            return current
+        pyproject = current / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                text = pyproject.read_text(encoding="utf-8")
+            except OSError:
+                text = ""
+            if _PROJECT_NAME_MARKER in text:
+                return current
+        if current.parent == current:
+            break
+        current = current.parent
+    return start.resolve()
+
+
+def _resolve_project_dir(args: argparse.Namespace) -> Path:
+    """Resolve the project root directory for the current command.
+
+    Priority: explicit ``--project-dir`` > the directory implied by an
+    explicit ``--config`` > upward discovery from the cwd > the cwd.
+    """
+    explicit = getattr(args, "project_dir", None)
+    if explicit is not None:
+        return Path(explicit).resolve()
+
+    config_arg = getattr(args, "config", None)
+    if config_arg is not None and Path(config_arg) != _DEFAULT_CONFIG:
+        config_path = Path(config_arg).resolve()
+        if config_path.parent.name == "config":
+            return config_path.parent.parent
+        return config_path.parent
+
+    return _discover_project_dir(Path.cwd())
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,6 +108,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- render ---
     render_p = subparsers.add_parser("render", help="Render Markdown to WeChat HTML.")
+    render_p.add_argument("--project-dir", type=Path, default=None,
+                          help="Project root directory (config/, .env and output "
+                               "anchors); default: auto-discovered from the cwd")
     render_p.add_argument("--md", type=Path, default=Path("input/article.md"),
                           help="Path to Markdown article (default: input/article.md)")
     render_p.add_argument("--out", type=Path, default=Path("build/article.wechat.html"),
@@ -63,6 +124,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- draft ---
     draft_p = subparsers.add_parser("draft", help="Create a WeChat draft from Markdown.")
+    draft_p.add_argument("--project-dir", type=Path, default=None,
+                         help="Project root directory (config/, .env and output "
+                              "anchors); default: auto-discovered from the cwd")
     draft_p.add_argument("--md", type=Path, default=Path("input/article.md"),
                          help="Path to Markdown article")
     draft_p.add_argument("--dry-run", action="store_true",
@@ -98,6 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- inspect ---
     inspect_p = subparsers.add_parser("inspect", help="Inspect resolved metadata and assets.")
+    inspect_p.add_argument("--project-dir", type=Path, default=None,
+                           help="Project root directory (config/, .env and output "
+                                "anchors); default: auto-discovered from the cwd")
     inspect_p.add_argument("--md", type=Path, default=Path("input/article.md"),
                            help="Path to Markdown article")
     inspect_p.add_argument("--config", type=Path, default=Path("config/publish.yaml"),
@@ -208,7 +275,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         print(f"[ERROR] Markdown file not found: {md_path}", file=sys.stderr)
         return 1
 
-    project = _project_dir()
+    project = _resolve_project_dir(args)
     style_path = resolve_style_path(
         style_arg=args.style, theme_arg=args.theme, project_dir=project
     )
@@ -236,7 +303,7 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         print(f"[ERROR] Markdown file not found: {md_path}", file=sys.stderr)
         return 1
 
-    project = _project_dir()
+    project = _resolve_project_dir(args)
     pub_cfg = load_publish_config(project / args.config)
     style_path = resolve_style_path(
         style_arg=args.style, theme_arg=args.theme, project_dir=project
@@ -311,7 +378,7 @@ def _render_stage(args: argparse.Namespace) -> _DraftStage:
     if not md_path.exists():
         raise _Abort(f"Markdown file not found: {md_path}")
 
-    project = _project_dir()
+    project = _resolve_project_dir(args)
     pub_cfg = load_publish_config(project / args.config)
     style_path = resolve_style_path(
         style_arg=args.style, theme_arg=args.theme, project_dir=project

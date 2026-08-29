@@ -22,3 +22,6 @@ prompt.txt
 # working drafts & media assets: only the example article is tracked
 input/*
 !input/article.example.md
+
+# python build artifacts
+dist/

@@ -1,6 +1,7 @@
 # Copy this file to config/publish.yaml and adjust local defaults.
+# This file is documentation-only: it is never read at runtime.
 
-default_author: "Cy257"
+default_author: ""
 
 article:
   cover: "input/cover.png"

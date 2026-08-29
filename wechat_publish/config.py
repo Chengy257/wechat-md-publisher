@@ -152,14 +152,37 @@ def resolve_style_path(
     return project_style
 
 
+def normalize_string_or_list(value: Any, *, field: str) -> list[str]:
+    """Normalize a config value to a non-empty list of strings.
+
+    Accepts a single string (wrapped into a one-element list) or a
+    list/tuple of non-empty strings. Anything else raises ``ValueError``
+    with the config field name in the message.
+    """
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        if all(isinstance(item, str) and item for item in value):
+            return list(value)
+    raise ValueError(
+        f"config field '{field}' must be a string or a list of strings "
+        f"(got: {value!r})"
+    )
+
+
 def load_publish_config(path: Path) -> Mapping[str, Any]:
-    """Load publish config, falling back to .example variant."""
+    """Load publish config; missing file yields built-in defaults ({}).
+
+    The bundled ``publish.example.yaml`` is documentation-only: it is never
+    read at runtime. A missing config prints an INFO hint to stderr.
+    """
     if not path.exists():
-        example = path.with_suffix(".example.yaml")
-        if example.exists():
-            path = example
-        else:
-            return {}
+        print(
+            f"[INFO] no publish config at {path}; using built-in defaults "
+            f"(copy config/publish.example.yaml to customize).",
+            file=sys.stderr,
+        )
+        return {}
     text = path.read_text(encoding="utf-8")
     data = yaml.safe_load(text)
     return data if isinstance(data, dict) else {}
@@ -199,7 +222,15 @@ def resolve_config(
         or front_matter.get("author")
         or article_cfg.get("default_author")
         or publish_config.get("default_author")
-        or _first_env(env, tuple(wechat_cfg.get("author_env", _AUTHOR_ENVS)))
+        or _first_env(
+            env,
+            tuple(
+                normalize_string_or_list(
+                    wechat_cfg.get("author_env", _AUTHOR_ENVS),
+                    field="wechat.author_env",
+                )
+            ),
+        )
         or ""
     )
 
@@ -292,10 +323,17 @@ def resolve_credentials(
     """Resolve (appid, appsecret) from config hints and environment."""
     wechat_cfg = publish_config.get("wechat", {})
 
-    appid_keys = tuple(wechat_cfg.get("appid_env", _APPID_ENVS))
-    appid = _first_env(env, appid_keys) or os.environ.get("WECHAT_APPID", "")
+    appid_keys = normalize_string_or_list(
+        wechat_cfg.get("appid_env", _APPID_ENVS), field="wechat.appid_env"
+    )
+    appid = _first_env(env, tuple(appid_keys)) or os.environ.get("WECHAT_APPID", "")
 
-    appsecret_keys = tuple(wechat_cfg.get("appsecret_env", _APPSECRET_ENVS))
-    appsecret = _first_env(env, appsecret_keys) or os.environ.get("WECHAT_APPSECRET", "")
+    appsecret_keys = normalize_string_or_list(
+        wechat_cfg.get("appsecret_env", _APPSECRET_ENVS),
+        field="wechat.appsecret_env",
+    )
+    appsecret = _first_env(env, tuple(appsecret_keys)) or os.environ.get(
+        "WECHAT_APPSECRET", ""
+    )
 
     return appid, appsecret

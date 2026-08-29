@@ -11,8 +11,10 @@ license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
   "beautifulsoup4>=4.12",
+  "cssutils>=2.9",
   "markdown-it-py>=3.0",
   "premailer>=3.10",
+  "Pygments>=2.13",
   "python-dotenv>=1.0",
   "pyyaml>=6.0",
   "requests>=2.31",
@@ -20,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "Pillow>=10.0",
   "pytest>=8.0",
   "responses>=0.25",
   "ruff>=0.6",
