@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import check_wechat_response
-from .http import json_response, request_with_retry
+from .http import json_response, request_with_retry, require_field
 from .state import save_json_mapping
 
 API_BASE = "https://api.weixin.qq.com"
@@ -58,7 +58,7 @@ def request_access_token(appid: str, appsecret: str) -> AccessToken:
     data = json_response(resp, "get_access_token")
     check_wechat_response("get_access_token", data)
 
-    token_value = data["access_token"]
+    token_value = require_field(data, "access_token", "get_access_token")
     expires_in = data.get("expires_in", 7200)
     expires_at = int(time.time()) + expires_in
 

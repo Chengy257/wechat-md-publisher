@@ -60,6 +60,16 @@ def _atomic_write_text(path: Path, text: str) -> None:
         raise
 
 
+def write_text_atomic(path: Path, text: str) -> None:
+    """Write *text* to *path* atomically (temp file in same dir + os.replace).
+
+    Public wrapper over :func:`_atomic_write_text` for callers outside this
+    module that must not leave half-written files behind (e.g. the final
+    WeChat HTML, which is persisted before any remote side effect).
+    """
+    _atomic_write_text(path, text)
+
+
 def save_json_mapping(path: Path, data: Mapping[str, Any]) -> None:
     """Save a JSON mapping to disk atomically."""
     _atomic_write_text(

@@ -10,7 +10,7 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 from .errors import check_wechat_response
-from .http import json_response, request_with_retry
+from .http import RetryPolicy, json_response, request_with_retry, require_field
 from .state import load_json_mapping, save_json_mapping
 
 API_BASE = "https://api.weixin.qq.com"
@@ -148,8 +148,16 @@ def _post_multipart(
     url: str,
     file_field: dict,
 ) -> dict:
-    """POST a multipart file upload to a WeChat endpoint and parse the reply."""
-    resp = request_with_retry("POST", url, operation=operation, files=file_field, timeout=60)
+    """POST a multipart file upload to a WeChat endpoint and parse the reply.
+
+    Uses the UPLOAD retry policy: only ConnectTimeout and 5xx are retried;
+    an uncertain failure (ReadTimeout / generic ConnectionError) raises
+    AmbiguousRequestError so the upload is never blindly replayed.
+    """
+    resp = request_with_retry(
+        "POST", url, operation=operation, files=file_field, timeout=60,
+        policy=RetryPolicy.UPLOAD,
+    )
     data = json_response(resp, operation)
     check_wechat_response(operation, data)
     return data
@@ -227,7 +235,10 @@ def upload_cover_image(
     with open(path, "rb") as f:
         data = _post_multipart("upload_cover_image", url, {"media": f})
 
-    result = UploadedCover(media_id=data["media_id"], url=data.get("url"))
+    result = UploadedCover(
+        media_id=require_field(data, "media_id", "upload_cover_image"),
+        url=data.get("url"),
+    )
     print(f"[INFO] uploaded cover: {path.name} -> media_id={result.media_id[:6]}...")
 
     # Update cache
@@ -263,7 +274,7 @@ def upload_body_image(
     with open(path, "rb") as f:
         data = _post_multipart("upload_body_image", url, {"media": f})
 
-    result = UploadedBodyImage(url=data["url"])
+    result = UploadedBodyImage(url=require_field(data, "url", "upload_body_image"))
     print(f"[INFO] uploaded image: {path.name} -> {result.url[:40]}...")
 
     # Update cache

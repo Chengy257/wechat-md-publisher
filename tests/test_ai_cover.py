@@ -1,6 +1,5 @@
 """AI cover image generation tests with mocked HTTP."""
 
-import base64
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,7 +11,11 @@ from wechat_publish.ai_cover import (
     resolve_cover_ai_config,
 )
 
-_FAKE_PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50).decode()
+# A real 4x2 PNG (decoded+verified by Pillow in generate_cover_image).
+_FAKE_PNG = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAIAAADwyuo0AAAAFElEQVR4nGM8ISfHAANMcBYD"
+    "AwMAGVgBCNdbWuMAAAAASUVORK5CYII="
+)
 
 
 class TestBuildPrompt:
@@ -98,7 +101,7 @@ class TestResolveCoverAiConfig:
         url, key, model, prompt = resolve_cover_ai_config({}, {})
         assert url == "https://generativelanguage.googleapis.com"
         assert key == ""
-        assert model == "gemini-2.0-flash-exp"
+        assert model == "gemini-2.5-flash-image"
         assert prompt == ""
 
     def test_from_config(self):

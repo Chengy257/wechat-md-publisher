@@ -26,11 +26,17 @@ from .config import (
     resolve_style_path,
 )
 from .draft import DraftArticle, add_draft, build_draft_payload, validate_publish_preflight
-from .errors import WeChatAPIError
+from .errors import RemoteDraftCreatedLocalStateFailed, WeChatAPIError
 from .html_processor import discover_images, process_article_html
 from .images import compress_cover, process_images, upload_cover_image
 from .render import _wrap_preview, parse_front_matter, render_article, render_markdown_to_html
-from .state import PostState, ensure_state_dirs, quarantine_legacy_state, save_post_state
+from .state import (
+    PostState,
+    ensure_state_dirs,
+    quarantine_legacy_state,
+    save_post_state,
+    write_text_atomic,
+)
 from .token import get_access_token, mask_appid, mask_token
 
 _T = TypeVar("_T")
@@ -553,6 +559,7 @@ def _prepare_cover(
     if not cover.is_absolute():
         cover = stage.project / cover
 
+    ai_generated = False
     if not cover.exists() and getattr(args, "ai_cover", False):
         from .ai_cover import generate_cover_image, resolve_cover_ai_config
         ai_url, ai_key, ai_model, ai_prompt = resolve_cover_ai_config(
@@ -572,11 +579,15 @@ def _prepare_cover(
             print(f"[INFO] AI cover saved: {cover}")
         except Exception as e:
             raise _Abort(f"AI cover generation failed: {e}") from e
+        # AI-generated covers always go through compress_cover: the model
+        # output can exceed the 10MB material limit and its format/quality
+        # is not user-controlled, unlike a user-provided cover file.
+        ai_generated = True
 
     if not cover.exists():
         raise _Abort(f"Cover image not found: {cover}. Use --cover or --ai-cover.")
 
-    if getattr(args, "compress_cover", False):
+    if getattr(args, "compress_cover", False) or ai_generated:
         cover = compress_cover(cover)
     return cover
 
@@ -631,6 +642,14 @@ def _publish_stage(
         need_open_comment=article.need_open_comment,
         only_fans_can_comment=article.only_fans_can_comment,
     )
+
+    # Persist the final HTML (with uploaded WeChat image URLs) BEFORE
+    # draft/add: writing it after a successful draft creation would risk a
+    # "remote draft exists but local artifacts missing" state, and a rerun
+    # would create a duplicate draft. This write happens before any remote
+    # side effect, so a failure here can simply abort the run.
+    write_text_atomic(stage.wechat_path, wechat_html)
+
     result = _run_with_token_retry(
         token, appid, appsecret, config.token_cache,
         lambda tv: add_draft(tv, draft_article),
@@ -642,11 +661,13 @@ def _publish_stage(
         wechat_html=stage.wechat_path,
         draft_media_id=result.media_id,
     )
-    state_path = save_post_state(config.posts_dir, state)
+    try:
+        state_path = save_post_state(config.posts_dir, state)
+    except OSError as e:
+        # The draft already exists remotely; failing silently (or with a
+        # generic error) would invite a blind rerun that duplicates it.
+        raise RemoteDraftCreatedLocalStateFailed(result.media_id, str(e)) from e
     print(f"[OK] state saved: {state_path}")
-
-    # Persist the final HTML with uploaded image URLs
-    stage.wechat_path.write_text(wechat_html, encoding="utf-8")
 
     print("\n[OK] Draft created successfully!")
     print(f"  media_id: {result.media_id}")

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import check_wechat_response
-from .http import json_response, request_with_retry
+from .http import RetryPolicy, json_response, request_with_retry, require_field
 
 API_BASE = "https://api.weixin.qq.com"
 
@@ -159,11 +159,12 @@ def add_draft(access_token: str, article: DraftArticle) -> DraftResult:
         operation="add_draft",
         json=payload,
         timeout=60,
+        policy=RetryPolicy.NON_IDEMPOTENT,
     )
     data = json_response(resp, "add_draft")
     check_wechat_response("add_draft", data)
 
-    media_id = data["media_id"]
+    media_id = require_field(data, "media_id", "add_draft")
     print(f"[INFO] draft created: media_id={media_id[:6]}...")
 
     return DraftResult(media_id=media_id, raw_response=data)

@@ -34,5 +34,5 @@ ai:
   summary_model: ""            # Model name (default: deepseek-chat)
   cover_api_url: ""            # Gemini API URL (default: https://generativelanguage.googleapis.com)
   cover_api_key_env: "GEMINI_API_KEY"  # Environment variable name for Gemini key
-  cover_model: ""              # Gemini model (default: gemini-2.0-flash-exp)
+  cover_model: ""              # Gemini model (default: gemini-2.5-flash-image)
   cover_prompt: ""             # Custom prompt (default: auto-generate from title)

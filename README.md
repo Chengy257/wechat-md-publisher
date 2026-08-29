@@ -6,10 +6,10 @@
 
 - **Markdown → 微信正文**：sanitize → 微信兼容化（代码块/列表/表格/标题改造）→ 外链转脚注 → CSS 内联（premailer），全流程无条件执行，杜绝未消毒输出
 - **内置主题**：`default / elegant / lapis / simple / tech`（随包分发，pip 安装即用），或用 `--style` 指定自定义 CSS
-- **图片处理**：正文图自动上传（`media/uploadimg`）并替换 src；封面走永久素材（`material/add_material`，≤10MB）；sha256 缓存避免重复上传；`--compress-cover` 可选 Pillow 压缩
-- **AI 增强**（可选）：`--ai-summary` 生成摘要（OpenAI 兼容接口，默认 DeepSeek）、`--ai-cover` 生成封面（Gemini）
+- **图片处理**：正文图自动上传（`media/uploadimg`）并替换 src；封面走永久素材（`material/add_material`，≤10MB）；sha256 缓存避免重复上传；`--compress-cover` 可选 Pillow 压缩（AI 生成的封面始终自动压缩）
+- **AI 增强**（可选）：`--ai-summary` 生成摘要（OpenAI 兼容接口，默认 DeepSeek）、`--ai-cover` 生成封面（Gemini，默认模型 `gemini-2.5-flash-image`，通过正式 API 参数 `imageConfig.aspectRatio: 21:9` 控制封面比例，并对返回图片做 MIME 与 Pillow 解码校验）
 - **Mermaid 图表**：`--mermaid` 本地渲染（mmdc，Windows 下自动兼容 `.cmd`）或在线 API（`--mermaid-engine api`），按内容 hash 缓存
-- **健壮性**：网络错误/5xx 自动重试、45009 限频退避、token 过期（42001）自动刷新重试一次、状态文件原子写、图片上传失败默认中止发布
+- **健壮性**：重试按幂等性分级（详见下文"错误处理与重试语义"）、45009 限频退避、token 过期（42001）自动刷新重试一次、状态文件原子写、图片上传失败默认中止发布
 - **安全**：本地图片仅允许 markdown 目录 / 项目目录 / build 目录内的路径；`.env` 不入库；token 与 appid 输出均掩码
 
 ## 安装
@@ -88,12 +88,21 @@ graph TD
 ## 产物与状态
 
 - `build/article.preview.html`：本地预览（含样式外壳）
-- `build/article.wechat.html`：上传后的最终正文（图片已替换为微信 URL）
+- `build/article.wechat.html`：上传后的最终正文（图片已替换为微信 URL）；在 `draft/add` 之前先行原子写盘，保证本地产物先于远端副作用就绪
 - `.wechat_publish/`：本地状态目录（已 gitignore）
   - `accounts/<account-key>/`：按公众号账号隔离的 `token.json`、`image_cache.json`、`cover_cache.json`（`<account-key>` 为 AppID 的 sha256 前 12 位；切换公众号后各账号状态完全独立，token 与素材缓存绝不跨账号复用）
   - `posts/`：发布记录
   - `legacy/`：升级前 v0.1.1 的旧缓存文件会被自动移入此处，不读取也不复用（token 重新获取、缓存重建）
   - 注意：token 为明文 access_token，不要分享该目录
+
+## 错误处理与重试语义
+
+重试按请求幂等性分级，非幂等请求绝不透明重放：
+
+- **幂等请求**（token 获取、远程图片下载等 GET）：连接错误/超时/5xx 自动退避重试（默认 2 次）。
+- **素材上传**（封面、正文图 multipart 上传）：仅"连接未建立"（ConnectTimeout）与 5xx 响应可安全重试；读超时或一般连接错误时请求可能已被微信处理，工具会抛出 `AmbiguousRequestError` 并提示先检查微信素材库，绝不盲目重发。
+- **`draft/add`**（创建草稿，非幂等）：只有 ConnectTimeout 可重试；其余不确定失败一律抛 `AmbiguousRequestError` 并提示"先查微信草稿箱再重试"——重放可能创建重复草稿。
+- **远端成功、本地失败显式化**：草稿创建成功后若本地状态文件写盘失败，工具会报出远端 `media_id` 并警告"Do NOT blindly rerun"，先到公众号后台草稿箱核对，不要直接重跑（会重复建草稿）。最终 HTML 写盘发生在 `draft/add` 之前，此时失败尚无远端副作用，直接中止即可。
 
 ## 开发
 

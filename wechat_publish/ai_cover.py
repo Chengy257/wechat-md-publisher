@@ -10,7 +10,31 @@ from pathlib import Path
 import requests
 
 _DEFAULT_API_URL = "https://generativelanguage.googleapis.com"
-_DEFAULT_MODEL = "gemini-2.0-flash-exp"
+# Current production-stable Gemini image model (the former
+# "gemini-2.0-flash-exp" was an experimental preview and has been retired).
+_DEFAULT_MODEL = "gemini-2.5-flash-image"
+
+
+def _verify_image_bytes(image_bytes: bytes) -> None:
+    """Decode *image_bytes* with Pillow when available; raise ValueError otherwise.
+
+    The Gemini API might return text or corrupted bytes in an inlineData part;
+    a header sniff is not enough, so the payload is actually decoded. When
+    Pillow is not installed this check is skipped (same graceful degradation
+    as compress_cover).
+    """
+    try:
+        from PIL import Image
+    except ImportError:  # pragma: no cover - Pillow is a hard dep in practice
+        return
+
+    from io import BytesIO
+
+    try:
+        with Image.open(BytesIO(image_bytes)) as img:
+            img.verify()
+    except Exception as e:
+        raise ValueError(f"Gemini API returned invalid image data: {e}") from e
 
 
 def _build_prompt(title: str, custom_prompt: str = "") -> str:
@@ -47,6 +71,10 @@ def generate_cover_image(
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseModalities": ["TEXT", "IMAGE"],
+            # Aspect ratio is controlled by the official API parameter, not
+            # only by prompt text. 21:9 is the closest official tier to the
+            # 2.35:1 cinematic cover format used for WeChat covers.
+            "imageConfig": {"aspectRatio": "21:9"},
         },
     }
 
@@ -72,6 +100,11 @@ def generate_cover_image(
     for part in parts:
         inline = part.get("inlineData") or part.get("inline_data")
         if inline and inline.get("data"):
+            mime = inline.get("mimeType") or inline.get("mime_type")
+            if mime and not str(mime).startswith("image/"):
+                raise ValueError(
+                    f"Gemini API returned non-image data (mimeType={mime!r})"
+                )
             image_data = inline["data"]
             break
 
@@ -84,6 +117,9 @@ def generate_cover_image(
         raise ValueError(f"Gemini API returned invalid base64 image data: {e}") from e
     if not image_bytes:
         raise ValueError("Gemini API returned an empty image")
+
+    _verify_image_bytes(image_bytes)
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(image_bytes)
     return output_path

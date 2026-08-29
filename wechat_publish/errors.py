@@ -29,6 +29,58 @@ class WeChatAPIError(RuntimeError):
         )
 
 
+class AmbiguousRequestError(RuntimeError):
+    """Raised when a request may or may not have been processed by WeChat.
+
+    Non-idempotent requests (draft/add, multipart uploads) are never blindly
+    replayed after an uncertain failure (read timeout / connection error /
+    5xx): the caller must check WeChat first, because the server may have
+    already created the draft or stored the material.
+    """
+
+    def __init__(
+        self,
+        operation: str,
+        cause: Exception | None = None,
+        *,
+        status_code: int | None = None,
+        draft: bool = False,
+    ) -> None:
+        if cause is not None:
+            detail = f"{type(cause).__name__}: {cause}"
+        else:
+            detail = f"HTTP {status_code} response"
+        check = (
+            "Check the WeChat draft list before retrying"
+            if draft
+            else "Check the WeChat material library / draft content before retrying"
+        )
+        self.operation = operation
+        self.cause = cause
+        super().__init__(
+            f"[{operation}] The request outcome is uncertain: the request may "
+            f"have already reached WeChat when the failure occurred ({detail}). "
+            f"{check}. "
+            f"hint: WeChat may have already processed this request (a draft or "
+            f"material may already exist); do not blindly rerun the publish."
+        )
+
+
+class RemoteDraftCreatedLocalStateFailed(RuntimeError):
+    """The draft exists remotely but persisting local state afterwards failed.
+
+    Carries the remote media_id so the user can reconcile manually instead of
+    blindly rerunning (which would create a duplicate draft).
+    """
+
+    def __init__(self, media_id: str, reason: str) -> None:
+        self.media_id = media_id
+        super().__init__(
+            f"Draft was created remotely (media_id: {media_id}). "
+            f"Do NOT blindly rerun — check the WeChat draft list first: {reason}"
+        )
+
+
 def check_wechat_response(operation: str, response: Mapping[str, Any]) -> None:
     """Raise `WeChatAPIError` when a WeChat response indicates failure."""
     errcode = response.get("errcode")
