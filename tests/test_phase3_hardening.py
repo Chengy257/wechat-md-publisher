@@ -402,3 +402,44 @@ class TestAiCoverHardening:
         rc = main(["draft", "--md", "input/article.md", "--ai-cover"])
         assert rc == 0
         assert compress_calls["n"] >= 1  # compressed even without --compress-cover
+
+
+# ── draft/add wire format (raw UTF-8, never \uXXXX escapes) ────
+
+
+class TestDraftAddUtf8Body:
+    """WeChat stores default ensure_ascii=True escapes literally in the
+    draft box; the body must be raw UTF-8 JSON (JSON_UNESCAPED_UNICODE)."""
+
+    def test_chinese_is_sent_as_raw_utf8_not_escaped(self, monkeypatch):
+        from wechat_publish.draft import DraftArticle, add_draft
+
+        captured: dict = {}
+
+        class _JsonResp:
+            status_code = 200
+
+            def json(self):
+                return {"media_id": "MEDIA123"}
+
+        def fake_request(method, url, **kwargs):
+            captured.update(kwargs)
+            return _JsonResp()
+
+        monkeypatch.setattr("wechat_publish.http.requests.request", fake_request)
+
+        article = DraftArticle(
+            title="上下文压缩失败",
+            author="作者",
+            digest="中文摘要",
+            content="<p>上下文压缩失败：stream disconnected</p>",
+            thumb_media_id="THUMB",
+        )
+        result = add_draft("TOKEN", article)
+
+        assert result.media_id == "MEDIA123"
+        body = captured["data"]
+        assert isinstance(body, bytes)
+        assert "上下文压缩失败".encode() in body
+        assert b"\u4e0a" not in body  # no literal \uXXXX escape sequences
+        assert captured["headers"]["Content-Type"].startswith("application/json")

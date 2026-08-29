@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -153,11 +154,17 @@ def add_draft(access_token: str, article: DraftArticle) -> DraftResult:
     url = f"{API_BASE}/cgi-bin/draft/add?access_token={access_token}"
     payload = build_draft_payload(article)
 
+    # WeChat's draft/add does not decode \uXXXX escapes in the content field:
+    # a default ensure_ascii=True body is stored with the escape text visible
+    # in the draft box. Send the JSON as raw UTF-8 instead (same convention as
+    # the official PHP SDKs' JSON_UNESCAPED_UNICODE).
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     resp = request_with_retry(
         "POST",
         url,
         operation="add_draft",
-        json=payload,
+        data=body,
+        headers={"Content-Type": "application/json; charset=utf-8"},
         timeout=60,
         policy=RetryPolicy.NON_IDEMPOTENT,
     )
