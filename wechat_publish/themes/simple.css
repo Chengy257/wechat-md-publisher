@@ -111,7 +111,6 @@
   margin: 1em 0;
   background: #f8f8f8;
   border: 1px solid #eee;
-  white-space: pre-wrap;
 }
 
 .wechat-content pre code {
@@ -233,35 +232,34 @@
   color: #576b95;
 }
 
-/* 宽表卡片（≥5 列的表格自动转换为卡片流） */
-.table-cards {
+.wechat-content .table-scroll {
+  overflow-x: auto;
+}
+
+.wechat-content th {
+  white-space: nowrap;
+}
+
+/* 代码块语言条 */
+.wechat-content .codeblock {
   margin: 1em 0;
 }
 
-.table-card {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin: 0 0 10px;
-  background: #fafafa;
+.wechat-content .codeblock-bar {
+  position: relative;
+  background: #eef0f2;
+  border: 1px solid #eee;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #57606a;
+  font-family: Menlo, Consolas, Monaco, monospace;
 }
 
-.table-card-title {
-  margin: 0 0 6px;
-  font-weight: bold;
-  font-size: 15px;
-  color: #2c3e50;
-}
-
-.table-card-row {
-  margin: 3px 0;
-  font-size: 13px;
-  line-height: 1.6;
-  text-align: justify;
-}
-
-.table-card-key {
-  color: #2c3e50;
-  font-weight: bold;
-  margin-right: 6px;
+.wechat-content .codeblock pre {
+  margin: 0;
+  border-radius: 0 0 8px 8px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }

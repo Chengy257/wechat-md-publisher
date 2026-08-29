@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import wechat_publish.html_processor as html_processor_module
 from wechat_publish.html_processor import (
     convert_links_to_footnotes,
     discover_images,
@@ -300,7 +301,7 @@ class TestCodeBlockWhitespacePreservesMarkup:
         assert "<br" not in result
 
 
-class TestWideTableCards:
+class TestTableScroll:
     def _table(self, cols, rows):
         head = "".join(f"<th>列{i}</th>" for i in range(cols))
         body = "".join(
@@ -309,32 +310,63 @@ class TestWideTableCards:
         )
         return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
-    def test_wide_table_becomes_cards(self):
+    def test_table_wrapped_in_single_scroll_section(self):
         result = make_wechat_compatible(self._table(6, 3))
-        assert "<table" not in result
-        assert result.count('class="table-card"') == 3
-        assert 'class="table-card-title"' in result
-        # first column becomes the card title, remaining become key rows
-        assert result.count('class="table-card-row"') == 3 * 5
-        assert ">列5</span>" in result
-
-    def test_narrow_table_untouched(self):
-        html = self._table(3, 4)
-        result = make_wechat_compatible(html)
         assert "<table" in result
-        assert "table-card" not in result
+        assert result.count('class="table-scroll"') == 1
+        wrapper, _, rest = result.partition('<section class="table-scroll">')
+        assert "<table" in rest
 
-    def test_empty_cells_skipped_and_inline_markup_kept(self):
+    def test_scroll_wrapper_idempotent(self):
+        html = self._table(3, 2)
+        once = make_wechat_compatible(html)
+        twice = make_wechat_compatible(once)
+        assert twice.count('class="table-scroll"') == 1
+        assert 'class="table-scroll"><section class="table-scroll"' not in twice
+
+    def test_cell_alignment_stripped_other_styles_kept(self):
         html = (
-            "<table><thead><tr>"
-            + "".join(f"<th>列{i}</th>" for i in range(5))
-            + "</tr></thead><tbody>"
-            "<tr><td><strong>格式A</strong></td><td>值1</td><td></td>"
-            "<td><code>x=1</code></td><td>值3</td></tr>"
-            "</tbody></table>"
+            "<table><tr>"
+            '<th style="text-align:right;color:red">H</th>'
+            '<td style="text-align:center">D</td>'
+            '<td style="padding:2px">X</td>'
+            "</tr></table>"
         )
         result = make_wechat_compatible(html)
-        assert "<table" not in result
-        assert "<strong>格式A</strong>" in result
-        assert "<code>x=1</code>" in result
-        assert ">列2</span>" not in result  # empty cell skipped
+        assert 'style="color:red"' in result
+        assert "text-align" not in result
+        assert 'style="padding:2px"' in result
+
+    def test_convert_wide_tables_removed(self):
+        assert not hasattr(html_processor_module, "_convert_wide_tables")
+        assert not hasattr(html_processor_module, "_WIDE_TABLE_MIN_COLUMNS")
+
+
+class TestCodeBlockDecoration:
+    def test_language_block_gets_bar(self):
+        html = '<pre><code class="language-bash">echo hi</code></pre>'
+        result = make_wechat_compatible(html)
+        assert 'class="codeblock"' in result
+        assert 'class="codeblock-bar"' in result
+        assert '<span class="codeblock-lang">bash</span>' in result
+        bar_pos = result.find("codeblock-bar")
+        pre_pos = result.find("<pre>")
+        assert 0 < bar_pos < pre_pos
+
+    def test_unmarked_block_not_decorated(self):
+        html = "<pre><code>plain code</code></pre>"
+        result = make_wechat_compatible(html)
+        assert "codeblock" not in result
+
+    def test_mermaid_block_not_decorated(self):
+        html = '<pre><code class="language-mermaid">graph TD\nA-->B</code></pre>'
+        result = make_wechat_compatible(html)
+        assert "codeblock" not in result
+        assert "\n" in result  # mermaid newlines untouched
+
+    def test_decoration_idempotent(self):
+        html = '<pre><code class="language-python">x = 1</code></pre>'
+        once = make_wechat_compatible(html)
+        twice = make_wechat_compatible(once)
+        assert twice.count('class="codeblock"') == 1
+        assert twice.count('class="codeblock-bar"') == 1

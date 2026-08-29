@@ -162,6 +162,11 @@ def _wrap_preview(body_html: str, title: str = "") -> str:
         ".preview-title { font-size: 28px; line-height: 1.35; margin: 0 0 22px; "
         "font-weight: 800; color: #111827; }\n"
         "@media (max-width: 760px) { .preview-page { margin: 0; padding: 22px 14px; box-shadow: none; } }\n"
+        ".codeblock-bar { position: relative; }\n"
+        ".copy-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); "
+        "padding: 1px 10px; font-size: 12px; line-height: 1.6; border: 1px solid #d0d7de; "
+        "border-radius: 6px; background: #fff; color: #57606a; cursor: pointer; font-family: inherit; }\n"
+        ".copy-btn.copied { color: #1a7f37; border-color: #1a7f37; }\n"
         "</style>\n"
         "</head>\n"
         "<body>\n"
@@ -169,9 +174,50 @@ def _wrap_preview(body_html: str, title: str = "") -> str:
         f"{heading}"
         f"{body_html}\n"
         "</main>\n"
+        f"{_PREVIEW_COPY_SCRIPT}\n"
         "</body>\n"
         "</html>"
     )
+
+
+# Local preview only: the WeChat article body stays JavaScript-free, but the
+# browser preview can wire a clipboard button onto each code block's bar.
+_PREVIEW_COPY_SCRIPT = (
+    "<script>\n"
+    "(function () {\n"
+    "  document.querySelectorAll('pre > code').forEach(function (code) {\n"
+    "    var pre = code.parentElement;\n"
+    "    if (!pre) { return; }\n"
+    "    var container = pre.parentElement;\n"
+    "    var bar = container.querySelector(':scope > .codeblock-bar');\n"
+    "    if (!bar) {\n"
+    "      bar = document.createElement('section');\n"
+    "      bar.className = 'codeblock-bar';\n"
+    "      container.insertBefore(bar, pre);\n"
+    "    }\n"
+    "    if (bar.querySelector('.copy-btn')) { return; }\n"
+    "    var btn = document.createElement('button');\n"
+    "    btn.type = 'button';\n"
+    "    btn.className = 'copy-btn';\n"
+    "    btn.textContent = '复制';\n"
+    "    btn.addEventListener('click', function () {\n"
+    "      navigator.clipboard.writeText(code.innerText).then(function () {\n"
+    "        btn.textContent = '已复制';\n"
+    "        btn.classList.add('copied');\n"
+    "        setTimeout(function () {\n"
+    "          btn.textContent = '复制';\n"
+    "          btn.classList.remove('copied');\n"
+    "        }, 1500);\n"
+    "      }).catch(function () {\n"
+    "        btn.textContent = '复制失败';\n"
+    "        setTimeout(function () { btn.textContent = '复制'; }, 1500);\n"
+    "      });\n"
+    "    });\n"
+    "    bar.appendChild(btn);\n"
+    "  });\n"
+    "})();\n"
+    "</script>"
+)
 
 
 def _esc(text: str) -> str:

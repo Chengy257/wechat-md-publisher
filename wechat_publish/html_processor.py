@@ -131,66 +131,97 @@ def make_wechat_compatible(html: str) -> str:
     """Apply compatibility transforms for the WeChat rich-text backend.
 
     Converts fragile structures (code block whitespace, native lists) into
-    explicit inline content that WeChat preserves reliably. Wide tables are
-    converted to stacked cards: a 5+-column table cannot fit a phone-width
-    WeChat article view.
+    explicit inline content that WeChat preserves reliably. Tables are
+    wrapped in horizontally scrollable sections (a wide table cannot fit a
+    phone-width WeChat article view), code blocks with a language marker get
+    a language bar, and per-cell text alignment is normalized to the theme's
+    left alignment.
     """
     soup = BeautifulSoup(html, "html.parser")
     _normalize_code_blocks(soup)
+    _decorate_code_blocks(soup)
     _flatten_lists(soup)
-    _convert_wide_tables(soup)
+    _wrap_scrollable_tables(soup)
+    _normalize_table_alignment(soup)
     _stripe_tables(soup)
     _convert_headings(soup)
     return str(soup)
 
 
-# Tables with at least this many columns become stacked cards (phone-width
-# views cannot show more columns readably, and WeChat clips overflow).
-_WIDE_TABLE_MIN_COLUMNS = 5
+def _decorate_code_blocks(soup: BeautifulSoup) -> None:
+    """Add a language bar above code blocks that declare a language.
+
+    Each ``pre > code`` whose class carries ``language-X`` (and X is not
+    ``mermaid``) is wrapped into ``section.codeblock`` with a
+    ``section.codeblock-bar`` (containing ``span.codeblock-lang``) placed
+    before the pre. Blocks without a language marker and mermaid blocks are
+    left untouched, and already-wrapped pres are skipped (idempotent).
+    """
+    prefix = "language-"
+    for pre in soup.find_all("pre"):
+        code = pre.find("code")
+        if code is None:
+            continue
+        lang = next(
+            (
+                cls[len(prefix):]
+                for cls in (code.get("class") or [])
+                if cls.startswith(prefix)
+            ),
+            None,
+        )
+        if not lang or lang == "mermaid":
+            continue
+        parent = pre.parent
+        if parent is not None and "codeblock" in (parent.get("class") or []):
+            continue
+        wrapper = soup.new_tag("section", attrs={"class": "codeblock"})
+        bar = soup.new_tag("section", attrs={"class": "codeblock-bar"})
+        label = soup.new_tag("span", attrs={"class": "codeblock-lang"})
+        label.string = lang
+        bar.append(label)
+        pre.replace_with(wrapper)
+        wrapper.append(bar)
+        wrapper.append(pre)
 
 
-def _convert_wide_tables(soup: BeautifulSoup) -> None:
-    """Turn wide tables into per-row card sections.
+def _wrap_scrollable_tables(soup: BeautifulSoup) -> None:
+    """Wrap every table in a ``section.table-scroll`` for horizontal scrolling.
 
-    Each row becomes a ``section.table-card``: the first cell is the card
-    title, and every remaining cell becomes a ``<p class="table-card-row">``
-    with the column header as a ``span.table-card-key`` label. Inline markup
-    inside cells (links, code spans, strong) is preserved.
+    Tables whose parent is already a ``.table-scroll`` section are skipped,
+    so repeated invocations never nest wrappers.
     """
     for table in soup.find_all("table"):
-        header_cells = table.find_all("th")
-        if len(header_cells) < _WIDE_TABLE_MIN_COLUMNS:
+        parent = table.parent
+        if parent is not None and "table-scroll" in (parent.get("class") or []):
             continue
-        keys = [cell.get_text(strip=True) for cell in header_cells]
-        body_rows = table.find("tbody")
-        rows = body_rows.find_all("tr", recursive=False) if body_rows else table.find_all("tr")
+        wrapper = soup.new_tag("section", attrs={"class": "table-scroll"})
+        table.replace_with(wrapper)
+        wrapper.append(table)
 
-        cards: list[Tag] = []
-        for row in rows:
-            cells = row.find_all(["td", "th"], recursive=False)
-            if not cells:
-                continue
-            card = soup.new_tag("section", attrs={"class": "table-card"})
-            title = soup.new_tag("p", attrs={"class": "table-card-title"})
-            title.extend(cells[0].contents)
-            card.append(title)
-            for key, cell in zip(keys[1:], cells[1:], strict=False):
-                if not cell.get_text(strip=True):
-                    continue
-                line = soup.new_tag("p", attrs={"class": "table-card-row"})
-                key_span = soup.new_tag("span", attrs={"class": "table-card-key"})
-                key_span.string = key
-                line.append(key_span)
-                line.extend(cell.contents)
-                card.append(line)
-            cards.append(card)
 
-        if not cards:
+def _normalize_table_alignment(soup: BeautifulSoup) -> None:
+    """Strip inline ``text-align`` from table cells so theme CSS wins.
+
+    markdown-it turns ``|---:|`` alignment columns into per-cell inline
+    ``text-align`` declarations, which survive premailer inlining and
+    override the theme's left alignment. Other style declarations on the
+    same cell are preserved; the style attribute is dropped when empty.
+    """
+    for cell in soup.find_all(["th", "td"]):
+        style = cell.get("style")
+        if not style:
             continue
-        container = soup.new_tag("section", attrs={"class": "table-cards"})
-        for card in cards:
-            container.append(card)
-        table.replace_with(container)
+        kept = [
+            decl.strip()
+            for decl in style.split(";")
+            if decl.strip()
+            and decl.strip().split(":", 1)[0].strip().lower() != "text-align"
+        ]
+        if kept:
+            cell["style"] = "; ".join(kept)
+        else:
+            del cell["style"]
 
 
 def inline_css(html: str, css: str) -> str:
