@@ -244,3 +244,23 @@ class TestInspectAndRenderCommands:
         assert "<script>" not in html
         assert "style=" in html  # bundled default theme inlined
         assert "<h1" not in html or "h1-like" not in html  # h1 untouched by design
+
+    def test_render_accepts_new_bundled_themes(self, tmp_project: Path):
+        """fancy / nb / filling are registered as --theme choices and inline."""
+        article = tmp_project / "input" / "article.md"
+        article.write_text(
+            "# Heading\n\n> quote\n\nSee [link](https://example.com).\n\n"
+            "```python\nprint('hi')\n```\n",
+            encoding="utf-8",
+        )
+        identity = {"fancy": "#0969da", "nb": "#5b6cff", "filling": "#c0392b"}
+        for theme, color in identity.items():
+            rc = main([
+                "render", "--md", "input/article.md",
+                "--theme", theme,
+                "--out", "build/w.html", "--preview-out", "build/p.html",
+            ])
+            assert rc == 0, theme
+            html = (tmp_project / "build" / "w.html").read_text(encoding="utf-8")
+            assert "style=" in html  # theme CSS inlined
+            assert color in html  # theme identity color survives inlining

@@ -1,8 +1,18 @@
 """Markdown rendering tests: front matter, HTML output, preview shell."""
 
+import re
 from pathlib import Path
 
-from wechat_publish.render import parse_front_matter, render_article, render_markdown_to_html
+import pytest
+
+from wechat_publish.config import load_theme_css, resolve_style_path
+from wechat_publish.html_processor import process_article_html
+from wechat_publish.render import (
+    parse_front_matter,
+    pygments_style_for_theme,
+    render_article,
+    render_markdown_to_html,
+)
 
 # ── Front matter parsing ────────────────────────────────────────
 
@@ -168,8 +178,11 @@ class TestPygmentsStyleSelection:
         assert pygments_style_for_theme("tech") == "github-dark"
         assert pygments_style_for_theme("elegant") == "github-dark"
         assert pygments_style_for_theme("lapis") == "github-dark"
+        assert pygments_style_for_theme("nb") == "github-dark"
         assert pygments_style_for_theme("default") == "friendly"
         assert pygments_style_for_theme("simple") == "friendly"
+        assert pygments_style_for_theme("fancy") == "friendly"
+        assert pygments_style_for_theme("filling") == "friendly"
         assert pygments_style_for_theme(None) == "friendly"
         assert pygments_style_for_theme("unknown-theme") == "friendly"
 
@@ -181,3 +194,67 @@ class TestPygmentsStyleSelection:
         assert 'style="color:' in dark
         # Both keep the code structure intact
         assert "<pre><code" in light and "<pre><code" in dark
+
+
+# ── Bundled theme smoke: fancy / nb / filling ────────────────────
+
+_THEME_IDENTITY_COLORS = {
+    "fancy": "#0969da",
+    "nb": "#5b6cff",
+    "filling": "#c0392b",
+}
+
+_SMOKED_THEMES = ("fancy", "nb", "filling")
+
+
+def _bundled_theme_css(theme: str) -> str:
+    path = resolve_style_path(style_arg=None, theme_arg=theme, project_dir=Path("/tmp"))
+    assert path.name == f"{theme}.css"
+    css = load_theme_css(path)
+    assert css, f"bundled {theme}.css must not be empty"
+    return css
+
+
+class TestNewThemeSmoke:
+    """fancy / nb / filling must survive the full inline pipeline."""
+
+    @pytest.mark.parametrize("theme", _SMOKED_THEMES)
+    def test_theme_registered_and_bundled(self, theme):
+        from wechat_publish.config import BUILTIN_THEMES
+
+        assert theme in BUILTIN_THEMES
+        _bundled_theme_css(theme)
+
+    @pytest.mark.parametrize("theme", _SMOKED_THEMES)
+    def test_theme_inlines_identity_and_structure(self, theme):
+        md = (
+            "# Heading 1\n\n## Heading 2\n\n> a quote\n\n- item\n\n"
+            "| A | B |\n|---|---|\n| 1 | 2 |\n\n"
+            "```python\nprint('hi')\n```\n"
+        )
+        raw = render_markdown_to_html(
+            md, pygments_style=pygments_style_for_theme(theme)
+        )
+        html = process_article_html(raw, _bundled_theme_css(theme))
+        # Theme identity color survives inlining.
+        assert _THEME_IDENTITY_COLORS[theme] in html
+        # Code element carries the wu5 scroll contract verbatim.
+        pre_start = html.find("<pre")
+        code_seg = html[pre_start: html.find("</code>", pre_start)]
+        assert "display:block" in code_seg
+        assert "overflow-x:auto" in code_seg
+        assert "white-space:pre" in code_seg
+        assert "-webkit-overflow-scrolling:touch" in code_seg
+        # Table scroll wrapper got the touch-scroll style inlined.
+        scroll_start = html.find('class="table-scroll"')
+        assert scroll_start != -1
+        scroll_seg = html[scroll_start: html.find("<table", scroll_start)]
+        assert "-webkit-overflow-scrolling:touch" in scroll_seg
+        # Copy button is an absolutely positioned span in the body.
+        copy_start = html.find('class="copy-btn"')
+        assert copy_start != -1
+        tag_start = html.rfind("<span", 0, copy_start)
+        tag_end = html.find(">", copy_start)
+        btn_style = re.search(r'style="([^"]*)"', html[tag_start:tag_end])
+        assert btn_style is not None
+        assert "position:absolute" in btn_style.group(1)

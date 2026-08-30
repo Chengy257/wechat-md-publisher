@@ -116,7 +116,10 @@ def load_theme_css(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-BUILTIN_THEMES = {"default", "elegant", "lapis", "simple", "tech"}
+BUILTIN_THEMES = {
+    "default", "elegant", "lapis", "simple", "tech",
+    "fancy", "nb", "filling",
+}
 
 _THEMES_DIR = Path(__file__).resolve().parent / "themes"
 

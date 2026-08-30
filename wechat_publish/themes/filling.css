@@ -1,0 +1,326 @@
+/* filling 主题 — 朱砂红暖调（浅色）。
+   来源说明：选自 doocs/md 主题市场的 filling 主题；其 CSS 仅经主题市场分发、
+   无公开源码（v1.x 为用户粘贴式自定义 CSS，v2 内置仅 default/grace/simple），
+   故按其公开视觉规范在本项目主题体系内适配实现（非逐字移植），
+   结构骨架沿用本项目 default.css。 */
+
+.wechat-content {
+  font-family: Optima-Regular, Optima, PingFangSC-light, PingFangTC-light, "PingFang SC", Cambria, Cochin, Georgia, Times, "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: #40332e;
+  letter-spacing: 0.1em;
+  overflow-wrap: break-word;
+}
+
+/* 一级标题 */
+.wechat-content h1 {
+  display: table;
+  padding: 0 1em;
+  border-bottom: 2px solid #c0392b;
+  margin: 1.6em auto 1em;
+  font-size: 22px;
+  font-weight: bold;
+  text-align: center;
+  color: #40332e;
+}
+
+/* 二级标题 */
+.wechat-content h2 {
+  display: table;
+  padding: 0.2em 0.4em;
+  margin: 2em auto 1.25em;
+  color: #40332e;
+  border-bottom: 2px solid #c0392b;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+}
+
+/* 三级标题 */
+.wechat-content h3 {
+  padding-left: 10px;
+  border-left: 3px solid #c0392b;
+  margin: 1.8em 0 0.75em;
+  font-size: 17px;
+  font-weight: bold;
+  color: #40332e;
+  line-height: 1.4;
+}
+
+.wechat-content .h3-like {
+  padding-left: 10px;
+  border-left: 3px solid #c0392b;
+  margin: 1.8em 0 0.75em;
+  font-size: 17px;
+  font-weight: bold;
+  color: #40332e;
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* 段落 */
+.wechat-content p {
+  margin: 1.2em 0;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+/* 引用 */
+.wechat-content blockquote {
+  font-style: normal;
+  padding: 1em 1em 1em 1.2em;
+  border-left: 3px solid #c0392b;
+  border-radius: 6px;
+  color: #40332e;
+  background: #fdf3f2;
+  margin: 1.2em 0;
+}
+
+.wechat-content blockquote p {
+  margin: 0;
+  font-size: 15px;
+  color: #8a6d66;
+}
+
+/* 列表 */
+.wechat-content ul,
+.wechat-content ol {
+  margin: 0.8em 0;
+  padding-left: 1.5em;
+  color: #40332e;
+}
+
+.wechat-content li {
+  margin: 0.3em 0;
+  color: #40332e;
+}
+
+/* 行内代码 */
+.wechat-content code {
+  font-family: Menlo, Operator Mono, Consolas, Monaco, monospace;
+  font-size: 14px;
+  color: #a93226;
+  background: rgba(192, 57, 43, 0.08);
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+/* 代码块 */
+.wechat-content pre {
+  font-size: 14px;
+  overflow-x: auto;
+  border-radius: 8px;
+  padding: 16px;
+  line-height: 1.6;
+  margin: 1em 0;
+  background: #f7f2f0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.wechat-content pre code {
+  display: block;
+  padding: 0;
+  color: #40332e;
+  background: transparent;
+  font-size: 13px;
+  border-radius: 0;
+}
+
+/* 粗体 */
+.wechat-content strong {
+  font-weight: bold;
+  color: #c0392b;
+}
+
+/* 斜体 */
+.wechat-content em {
+  font-style: italic;
+  color: #40332e;
+}
+
+/* 链接 */
+.wechat-content a {
+  color: #c0392b;
+  text-decoration: none;
+  border-bottom: 1px solid #c0392b;
+}
+
+/* 图片 */
+.wechat-content img {
+  display: block;
+  max-width: 100%;
+  margin: 1em auto;
+  border-radius: 4px;
+}
+
+.wechat-content figcaption {
+  text-align: center;
+  color: #8a6d66;
+  font-size: 14px;
+  margin: 0.3em 0 1em;
+}
+
+/* 分隔线 */
+.wechat-content hr {
+  border: none;
+  height: 1px;
+  background: #e8d5cd;
+  margin: 2em 0;
+}
+
+/* 表格 */
+.wechat-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 13px;
+}
+
+.wechat-content th,
+.wechat-content td {
+  border: 1px solid #e8d5cd;
+  padding: 5px 8px;
+  text-align: left;
+}
+
+.wechat-content th {
+  font-weight: bold;
+  background: #f7ede9;
+}
+
+.wechat-content tr.row-alt {
+  background-color: #faf5f3;
+}
+
+/* 列表兼容 */
+.list-item {
+  margin: 0 0 8px;
+  line-height: 1.75;
+  text-align: justify;
+}
+
+.list-marker {
+  color: #c0392b;
+  font-weight: bold;
+}
+
+/* 脚注 */
+.footnote-ref {
+  color: #c0392b;
+  font-size: 0.8em;
+  font-weight: 600;
+  vertical-align: super;
+  margin: 0 2px;
+}
+
+.footnotes {
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid #e8d5cd;
+  font-size: 14px;
+  color: #8a6d66;
+}
+
+.footnotes ol {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.footnotes li {
+  margin-bottom: 6px;
+  color: #8a6d66;
+}
+
+.footnote-url {
+  color: #c0392b;
+}
+
+.wechat-content .table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+.wechat-content th {
+  white-space: nowrap;
+}
+
+/* 代码块：mac 风格标题条 + 横向滚动（滚动载体在 code 上） */
+.wechat-content .codeblock {
+  margin: 1.2em 0;
+  border-radius: 8px;
+}
+
+.wechat-content .codeblock-bar {
+  position: relative;
+  background: #efe6e2;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #8a6d66;
+  font-family: Menlo, Consolas, Monaco, monospace;
+}
+
+.wechat-content .codeblock-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.wechat-content .dot-red {
+  background-color: #ff5f56;
+}
+
+.wechat-content .dot-yellow {
+  background-color: #ffbd2e;
+}
+
+.wechat-content .dot-green {
+  background-color: #27c93f;
+}
+
+.wechat-content .codeblock-lang {
+  position: absolute;
+  right: 88px;
+  top: 8px;
+  font-size: 12px;
+  color: #8a6d66;
+}
+
+.wechat-content .copy-btn {
+  position: absolute;
+  right: 12px;
+  top: 5px;
+  padding: 1px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  border: 1px solid #d8c7c0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #8a6d66;
+}
+
+.wechat-content .codeblock pre {
+  margin: 0;
+  border-radius: 0 0 8px 8px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.wechat-content .codeblock pre code {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: pre;
+  background: transparent;
+  padding: 0;
+  line-height: 1.6;
+}

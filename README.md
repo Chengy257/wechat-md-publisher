@@ -5,7 +5,22 @@
 ## 功能
 
 - **Markdown → 微信正文**：sanitize（nh3 allowlist）→ 微信兼容化（代码块/列表/表格/标题改造）→ 外链转脚注 → CSS 内联（premailer），全流程无条件执行。sanitize 按 allowlist 语义移除对正常文章排版不安全/不支持的 HTML 构件（未列入白名单的标签与属性、`<script>/<style>` 内容、事件属性、非 http/https 链接等）；它服务于正常创作流程，**不承诺对任意不可信 HTML 安全**
-- **内置主题**：`default / elegant / lapis / simple / tech`（随包分发，pip 安装即用），或用 `--style` 指定自定义 CSS
+- **内置主题**：`default / elegant / lapis / simple / tech / fancy / nb / filling`（随包分发，pip 安装即用），或用 `--style` 指定自定义 CSS
+
+### 内置主题
+
+| 主题 | 风格 | 代码块底色 |
+| --- | --- | --- |
+| `default` | 经典绿，doocs/md 经典布局 | 浅灰（`#f6f8fa`） |
+| `elegant` | 雅蓝，蓝色学术风 | 深蓝（`#2c3e50`） |
+| `lapis` | 石青蓝，沉稳学术风 | 深蓝（`#2c3e50`） |
+| `simple` | 简约黑白，极简排版 | 浅灰（`#f8f8f8`） |
+| `tech` | 科技风，GitHub 暗色代码块 | 深黑（`#161b22`） |
+| `fancy` | GitHub 风技术文，灰阶克制、蓝色链接 | 浅灰（`#f6f8fa`） |
+| `nb` | 蓝紫现代风，主色 `#5b6cff` 点缀标题与引用 | 深蓝紫（`#272b3d`） |
+| `filling` | 朱砂红暖调，主色 `#c0392b` 暖灰正文 | 暖浅灰（`#f7f2f0`） |
+
+深色代码块的主题（`elegant / lapis / tech / nb`）自动搭配 `github-dark` 高亮调色板，其余主题使用 `friendly`。
 - **表格与代码块排版**：表格单元格统一左对齐（忽略 markdown 对齐语法产生的内联 text-align）；表格自动包进横向滚动容器（`section.table-scroll`），宽表格在手机上可横向滚动查看全部列；带语言标注的代码块顶部显示语言条（`codeblock-bar`），长代码行可横向滚动；本地 preview 的每个代码块带"复制"按钮（微信正文保持零 JavaScript，复制按钮仅存在于 `build/*.preview.html`）
 - **图片处理**：正文图自动上传（`media/uploadimg`，仅支持 JPG/PNG 且 ≤1MB）并替换 src；封面走永久素材（`material/add_material`，支持 JPG/JPEG/PNG/BMP/GIF 且 ≤10MB）；按接口拆分白名单并校验真实字节格式（魔数嗅探 + Pillow 可用时解码校验，伪图片/后缀与内容不符一律拒绝）；sha256 缓存避免重复上传；`--compress-cover` 可选 Pillow 压缩（AI 生成的封面始终自动压缩）
 - **AI 增强**（可选）：`--ai-summary` 生成摘要（OpenAI 兼容接口，默认 DeepSeek）、`--ai-cover` 生成封面（Gemini，默认模型 `gemini-2.5-flash-image`，通过正式 API 参数 `imageConfig.aspectRatio: 21:9` 控制封面比例，并对返回图片做 MIME 与 Pillow 解码校验）

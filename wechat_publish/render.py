@@ -59,7 +59,7 @@ _DEFAULT_CODE_STYLE = "friendly"
 # Themes whose code blocks have a dark background pair with a dark pygments
 # palette: tokens rendered with the light "friendly" palette are barely
 # readable on dark backgrounds.
-_DARK_CODE_THEMES = {"elegant", "lapis", "tech"}
+_DARK_CODE_THEMES = {"elegant", "lapis", "tech", "nb"}
 _DARK_CODE_STYLE = "github-dark"
 
 
