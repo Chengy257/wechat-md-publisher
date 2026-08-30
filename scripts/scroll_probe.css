@@ -1,0 +1,314 @@
+/* 默认主题 — 基于 doocs/md 经典主题，适配微信编辑器 */
+
+.wechat-content {
+  font-family: Optima-Regular, Optima, PingFangSC-light, PingFangTC-light, "PingFang SC", Cambria, Cochin, Georgia, Times, "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: #3e3e3e;
+  letter-spacing: 0.1em;
+  overflow-wrap: break-word;
+}
+
+/* 一级标题 */
+.wechat-content h1 {
+  display: table;
+  padding: 0 1em;
+  border-bottom: 2px solid #07c160;
+  margin: 1.6em auto 1em;
+  font-size: 22px;
+  font-weight: bold;
+  text-align: center;
+  color: #3e3e3e;
+}
+
+/* 二级标题 */
+.wechat-content h2 {
+  display: table;
+  padding: 0.2em 1.2em;
+  margin: 2em auto 1.25em;
+  color: #fff;
+  background: #07c160;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 4px;
+}
+
+/* 三级标题 */
+.wechat-content h3 {
+  padding-left: 10px;
+  border-left: 3px solid #07c160;
+  margin: 1.8em 0 0.75em;
+  font-size: 17px;
+  font-weight: bold;
+  color: #3e3e3e;
+  line-height: 1.4;
+}
+
+.wechat-content .h3-like {
+  padding-left: 10px;
+  border-left: 3px solid #07c160;
+  margin: 1.8em 0 0.75em;
+  font-size: 17px;
+  font-weight: bold;
+  color: #3e3e3e;
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* 段落 */
+.wechat-content p {
+  margin: 1.2em 0;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+/* 引用 */
+.wechat-content blockquote {
+  font-style: normal;
+  padding: 1em 1em 1em 1.2em;
+  border-left: 4px solid #07c160;
+  border-radius: 6px;
+  color: #3e3e3e;
+  background: #f7f7f7;
+  margin: 1.2em 0;
+}
+
+.wechat-content blockquote p {
+  margin: 0;
+  font-size: 15px;
+  color: #666;
+}
+
+/* 列表 */
+.wechat-content ul,
+.wechat-content ol {
+  margin: 0.8em 0;
+  padding-left: 1.5em;
+  color: #3e3e3e;
+}
+
+.wechat-content li {
+  margin: 0.3em 0;
+  color: #3e3e3e;
+}
+
+/* 行内代码 */
+.wechat-content code {
+  font-family: Menlo, Operator Mono, Consolas, Monaco, monospace;
+  font-size: 14px;
+  color: #d14;
+  background: rgba(27, 31, 35, 0.05);
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+/* 代码块 */
+.wechat-content pre {
+  font-size: 14px;
+  overflow-x: auto;
+  border-radius: 8px;
+  padding: 16px;
+  line-height: 1.6;
+  margin: 1em 0;
+  background: #f6f8fa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.wechat-content pre code {
+  display: block;
+  padding: 0;
+  color: #3e3e3e;
+  background: transparent;
+  font-size: 13px;
+  border-radius: 0;
+}
+
+/* 粗体 */
+.wechat-content strong {
+  font-weight: bold;
+  color: #07c160;
+}
+
+/* 斜体 */
+.wechat-content em {
+  font-style: italic;
+  color: #3e3e3e;
+}
+
+/* 链接 */
+.wechat-content a {
+  color: #576b95;
+  text-decoration: none;
+  border-bottom: 1px solid #576b95;
+}
+
+/* 图片 */
+.wechat-content img {
+  display: block;
+  max-width: 100%;
+  margin: 1em auto;
+  border-radius: 4px;
+}
+
+.wechat-content figcaption {
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+  margin: 0.3em 0 1em;
+}
+
+/* 分隔线 */
+.wechat-content hr {
+  border: none;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 2em 0;
+}
+
+/* 表格 */
+.wechat-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 13px;
+}
+
+.wechat-content th,
+.wechat-content td {
+  border: 1px solid #dfdfdf;
+  padding: 5px 8px;
+  text-align: left;
+}
+
+.wechat-content th {
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.wechat-content tr.row-alt {
+  background-color: #f8f8f8;
+}
+
+/* 列表兼容 */
+.list-item {
+  margin: 0 0 8px;
+  line-height: 1.75;
+  text-align: justify;
+}
+
+.list-marker {
+  color: #07c160;
+  font-weight: bold;
+}
+
+/* 脚注 */
+.footnote-ref {
+  color: #07c160;
+  font-size: 0.8em;
+  font-weight: 600;
+  vertical-align: super;
+  margin: 0 2px;
+}
+
+.footnotes {
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  font-size: 14px;
+  color: #888;
+}
+
+.footnotes ol {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.footnotes li {
+  margin-bottom: 6px;
+  color: #888;
+}
+
+.footnote-url {
+  color: #576b95;
+}
+
+.wechat-content .table-scroll {
+  overflow-x: auto;
+}
+
+.wechat-content th {
+  white-space: nowrap;
+}
+
+/* 代码块语言条 */
+.wechat-content .codeblock {
+  margin: 1em 0;
+}
+
+.wechat-content .codeblock-bar {
+  position: relative;
+  background: #eef1f4;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #57606a;
+  font-family: Menlo, Consolas, Monaco, monospace;
+}
+
+.wechat-content .codeblock pre {
+  margin: 0;
+  border-radius: 0 0 8px 8px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* ==== 滚动排版探针变体覆盖块（追加在文件末尾，同等特异性下靠后者覆盖默认主题） ==== */
+
+/* 表格A/表格B：推荐滚动写法 —— 滚动载体为 table 外层包裹层 */
+.wechat-content .probe-t1 .table-scroll,
+.wechat-content .probe-t2 .table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+/* 表头不换行（表格A/B一致） */
+.wechat-content .probe-t1 th,
+.wechat-content .probe-t2 th {
+  white-space: nowrap;
+}
+
+/* 表格B：单元格全部不换行，制造必然的横向溢出 */
+.wechat-content .probe-t2 td {
+  white-space: nowrap;
+}
+
+/* 代码A：旧式写法 —— 滚动放在 pre 上，code 保持行内、自身不滚动（复现当前失效形态） */
+.wechat-content .probe-c1 pre {
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.wechat-content .probe-c1 pre code {
+  display: inline;
+  overflow: visible;
+  white-space: normal;
+}
+
+/* 代码B：推荐写法 —— 滚动载体为 code 本身 */
+.wechat-content .probe-c2 pre code {
+  display: block;
+  overflow-x: auto;
+  white-space: pre;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 代码C：降级写法 —— 自动换行，不出现横向滚动 */
+.wechat-content .probe-c3 pre code {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
