@@ -8,6 +8,7 @@ from wechat_publish.html_processor import (
     discover_images,
     inline_css,
     make_wechat_compatible,
+    process_article_html,
     sanitize_html_fragment,
 )
 
@@ -343,7 +344,7 @@ class TestTableScroll:
 
 
 class TestCodeBlockDecoration:
-    def test_language_block_gets_bar(self):
+    def test_language_block_gets_bar_with_lang(self):
         html = '<pre><code class="language-bash">echo hi</code></pre>'
         result = make_wechat_compatible(html)
         assert 'class="codeblock"' in result
@@ -353,10 +354,19 @@ class TestCodeBlockDecoration:
         pre_pos = result.find("<pre>")
         assert 0 < bar_pos < pre_pos
 
-    def test_unmarked_block_not_decorated(self):
+    def test_bar_contains_three_dots(self):
+        html = '<pre><code class="language-python">x = 1</code></pre>'
+        result = make_wechat_compatible(html)
+        assert '<span class="codeblock-dot dot-red"></span>' in result
+        assert '<span class="codeblock-dot dot-yellow"></span>' in result
+        assert '<span class="codeblock-dot dot-green"></span>' in result
+
+    def test_unmarked_block_is_wrapped_without_lang(self):
         html = "<pre><code>plain code</code></pre>"
         result = make_wechat_compatible(html)
-        assert "codeblock" not in result
+        assert 'class="codeblock"' in result
+        assert 'class="codeblock-bar"' in result
+        assert "codeblock-lang" not in result
 
     def test_mermaid_block_not_decorated(self):
         html = '<pre><code class="language-mermaid">graph TD\nA-->B</code></pre>'
@@ -370,3 +380,104 @@ class TestCodeBlockDecoration:
         twice = make_wechat_compatible(once)
         assert twice.count('class="codeblock"') == 1
         assert twice.count('class="codeblock-bar"') == 1
+
+    def test_unmarked_decoration_idempotent(self):
+        html = "<pre><code>plain code</code></pre>"
+        once = make_wechat_compatible(html)
+        twice = make_wechat_compatible(once)
+        assert twice.count('class="codeblock"') == 1
+        assert twice.count("codeblock-dot") == 3
+
+
+# ── CSS inlining of the code block scroll carrier ──────────────
+
+
+_CODEBLOCK_CSS = """
+.wechat-content code { font-family: Menlo, Consolas, monospace; font-size: 14px; padding: 3px 5px; }
+.wechat-content pre { background: #f6f8fa; padding: 16px; }
+.wechat-content pre code { background: transparent; padding: 0; }
+.wechat-content .codeblock { margin: 1.2em 0; border-radius: 8px; }
+.wechat-content .codeblock-bar { position: relative; background: #eef1f4; padding: 4px 12px; font-size: 12px; }
+.wechat-content .codeblock-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; }
+.wechat-content .dot-red { background-color: #ff5f56; }
+.wechat-content .dot-yellow { background-color: #ffbd2e; }
+.wechat-content .dot-green { background-color: #27c93f; }
+.wechat-content .codeblock-lang { position: absolute; right: 12px; top: 8px; font-size: 12px; }
+.wechat-content .codeblock pre { margin: 0; border-radius: 0 0 8px 8px; }
+.wechat-content .codeblock pre code {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: pre;
+  background: transparent;
+  padding: 0;
+  line-height: 1.6;
+}
+.wechat-content .table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+.wechat-content th { white-space: nowrap; }
+"""
+
+
+class TestCodeBlockScrollInlining:
+    # premailer compacts inlined declarations ("display:block", not "display: block").
+    def test_block_code_inlines_scroll_carrier(self):
+        html = (
+            '<section class="codeblock">'
+            '<section class="codeblock-bar"></section>'
+            "<pre><code>x = 1</code></pre>"
+            "</section>"
+        )
+        result = inline_css(html, _CODEBLOCK_CSS)
+        assert "display:block" in result
+        assert "overflow-x:auto" in result
+        assert "white-space:pre" in result
+        assert "-webkit-overflow-scrolling:touch" in result
+
+    def test_inline_code_not_affected_by_scroll_rules(self):
+        html = "<p>run <code>pip install x</code> first</p>"
+        result = inline_css(html, _CODEBLOCK_CSS)
+        # The paragraph-level inline code must stay inline: no block/scroll props.
+        assert "display:block" not in result
+        assert "overflow-x" not in result
+        assert "-webkit-overflow-scrolling" not in result
+
+    def test_table_scroll_inlines_touch_scrolling(self):
+        html = (
+            '<section class="table-scroll">'
+            "<table><thead><tr><th>H</th></tr></thead></table>"
+            "</section>"
+        )
+        result = inline_css(html, _CODEBLOCK_CSS)
+        assert "overflow-x:auto" in result
+        assert "-webkit-overflow-scrolling:touch" in result
+
+    def test_end_to_end_pipeline_inlines_scroll_styles(self):
+        raw = (
+            "<p>inline <code>x=1</code> code</p>"
+            "<pre><code>plain</code></pre>"
+            "<pre><code class=\"language-python\">print('hi')</code></pre>"
+            "<table><thead><tr><th>H</th></tr></thead></table>"
+        )
+        result = process_article_html(raw, _CODEBLOCK_CSS)
+        # Block code gets the scroll carrier inlined.
+        pre_start = result.find("<pre")
+        pre_seg = result[pre_start: result.find("</code>", pre_start)]
+        assert "display:block" in pre_seg
+        assert "overflow-x:auto" in pre_seg
+        assert "white-space:pre" in pre_seg
+        assert "-webkit-overflow-scrolling:touch" in pre_seg
+        # Paragraph inline code stays inline: no block/scroll props.
+        p_seg = result[result.find("inline <code"):]
+        p_seg = p_seg[: p_seg.find("</code>")]
+        assert p_seg.startswith("inline <code")
+        assert "display:block" not in p_seg
+        assert "overflow-x" not in p_seg
+        assert "-webkit-overflow-scrolling" not in p_seg
+        # table-scroll wrapper got the touch-scroll style inlined.
+        scroll_start = result.find('class="table-scroll"')
+        scroll_seg = result[scroll_start: result.find("<table", scroll_start)]
+        assert "-webkit-overflow-scrolling:touch" in scroll_seg

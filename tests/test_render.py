@@ -126,6 +126,17 @@ class TestRenderArticle:
         assert "<html" not in result.wechat_html
         assert "<head>" not in result.wechat_html
 
+    def test_preview_shell_includes_codeblock_dots_and_copy_button(self, tmp_path: Path):
+        md_file = tmp_path / "article.md"
+        md_file.write_text("```python\nprint('hi')\n```\n", encoding="utf-8")
+        result = render_article(md_file, build_dir=tmp_path / "build")
+        # Body structure matches the WeChat output (mac-style bar + dots).
+        assert 'class="codeblock-bar"' in result.preview_html
+        assert 'class="codeblock-dot dot-red"' in result.preview_html
+        # Preview shell styles the dots and wires the copy button.
+        assert ".codeblock-bar .codeblock-dot" in result.preview_html
+        assert "copy-btn" in result.preview_html
+
     def test_more_marker_removed(self, tmp_path: Path):
         md_file = tmp_path / "article.md"
         md_file.write_text("Before\n\n<!--more-->\n\nAfter\n", encoding="utf-8")

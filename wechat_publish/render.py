@@ -163,7 +163,17 @@ def _wrap_preview(body_html: str, title: str = "") -> str:
         "font-weight: 800; color: #111827; }\n"
         "@media (max-width: 760px) { .preview-page { margin: 0; padding: 22px 14px; box-shadow: none; } }\n"
         ".codeblock-bar { position: relative; }\n"
-        ".copy-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); "
+        # Fallback dot styling so the mac-style dots are visible in the
+        # preview even when no theme CSS was inlined; with a theme the
+        # inlined styles match these declarations.
+        ".codeblock-bar .codeblock-dot { display: inline-block; width: 12px; "
+        "height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }\n"
+        ".codeblock-bar .dot-red { background-color: #ff5f56; }\n"
+        ".codeblock-bar .dot-yellow { background-color: #ffbd2e; }\n"
+        ".codeblock-bar .dot-green { background-color: #27c93f; }\n"
+        # The .codeblock-lang label carries an inlined position (right: 12px)
+        # inside the article body, so the copy button must clear it.
+        ".copy-btn { position: absolute; right: 64px; top: 50%; transform: translateY(-50%); "
         "padding: 1px 10px; font-size: 12px; line-height: 1.6; border: 1px solid #d0d7de; "
         "border-radius: 6px; background: #fff; color: #57606a; cursor: pointer; font-family: inherit; }\n"
         ".copy-btn.copied { color: #1a7f37; border-color: #1a7f37; }\n"

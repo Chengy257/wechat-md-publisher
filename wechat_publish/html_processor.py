@@ -133,9 +133,10 @@ def make_wechat_compatible(html: str) -> str:
     Converts fragile structures (code block whitespace, native lists) into
     explicit inline content that WeChat preserves reliably. Tables are
     wrapped in horizontally scrollable sections (a wide table cannot fit a
-    phone-width WeChat article view), code blocks with a language marker get
-    a language bar, and per-cell text alignment is normalized to the theme's
-    left alignment.
+    phone-width WeChat article view), every non-mermaid code block gets a
+    mac-style bar (decorative dots plus a language label when a language
+    marker is present), and per-cell text alignment is normalized to the
+    theme's left alignment.
     """
     soup = BeautifulSoup(html, "html.parser")
     _normalize_code_blocks(soup)
@@ -149,18 +150,26 @@ def make_wechat_compatible(html: str) -> str:
 
 
 def _decorate_code_blocks(soup: BeautifulSoup) -> None:
-    """Add a language bar above code blocks that declare a language.
+    """Wrap every non-mermaid ``pre > code`` into a mac-style code block.
 
-    Each ``pre > code`` whose class carries ``language-X`` (and X is not
-    ``mermaid``) is wrapped into ``section.codeblock`` with a
-    ``section.codeblock-bar`` (containing ``span.codeblock-lang``) placed
-    before the pre. Blocks without a language marker and mermaid blocks are
-    left untouched, and already-wrapped pres are skipped (idempotent).
+    Each ``pre`` that contains a ``code`` child and is not already inside a
+    ``.codeblock`` wrapper (idempotency) is wrapped into
+    ``section.codeblock`` with a ``section.codeblock-bar`` placed before the
+    pre. The bar carries three decorative dots (real empty ``span`` elements
+    — WeChat has no pseudo-elements) plus a ``span.codeblock-lang`` label
+    only when the code declares a non-mermaid ``language-X`` class.
+    Mermaid blocks are left untouched so the mermaid renderer can re-read
+    their newlines verbatim.
     """
     prefix = "language-"
     for pre in soup.find_all("pre"):
         code = pre.find("code")
         if code is None:
+            continue
+        if "language-mermaid" in (code.get("class") or []):
+            continue
+        parent = pre.parent
+        if parent is not None and "codeblock" in (parent.get("class") or []):
             continue
         lang = next(
             (
@@ -170,16 +179,14 @@ def _decorate_code_blocks(soup: BeautifulSoup) -> None:
             ),
             None,
         )
-        if not lang or lang == "mermaid":
-            continue
-        parent = pre.parent
-        if parent is not None and "codeblock" in (parent.get("class") or []):
-            continue
         wrapper = soup.new_tag("section", attrs={"class": "codeblock"})
         bar = soup.new_tag("section", attrs={"class": "codeblock-bar"})
-        label = soup.new_tag("span", attrs={"class": "codeblock-lang"})
-        label.string = lang
-        bar.append(label)
+        for dot_class in ("dot-red", "dot-yellow", "dot-green"):
+            bar.append(soup.new_tag("span", attrs={"class": f"codeblock-dot {dot_class}"}))
+        if lang:
+            label = soup.new_tag("span", attrs={"class": "codeblock-lang"})
+            label.string = lang
+            bar.append(label)
         pre.replace_with(wrapper)
         wrapper.append(bar)
         wrapper.append(pre)
