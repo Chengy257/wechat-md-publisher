@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -24,7 +25,11 @@ from wechat_publish.config import (
     resolve_theme_css,
 )
 from wechat_publish.html_processor import process_article_html
-from wechat_publish.render import pygments_style_for_theme, render_markdown_to_html
+from wechat_publish.render import (
+    pygments_style_for_palette,
+    pygments_style_for_theme,
+    render_markdown_to_html,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_PATH = ROOT / "tests" / "fixtures" / "theme_golden.json"
@@ -239,3 +244,77 @@ class TestResolveThemeCssRouting:
             style_arg=tmp_path / "nope.css", theme_arg=None, project_dir=tmp_path
         )
         assert css == ""
+
+
+# ── 配色 × 版式 matrix smoke (default layout x 8 palettes) ───────
+
+
+def _pygments_token_color(style_name: str) -> str:
+    """A representative token color of a pygments style (lowercase hex)."""
+    from pygments import token
+    from pygments.styles import get_style_by_name
+
+    style = get_style_by_name(style_name)
+    for ttype in (
+        token.Token.Keyword,
+        token.Token.Name.Function,
+        token.Token.Name.Builtin,
+        token.Token.Comment,
+    ):
+        color = style.style_for_token(ttype)["color"]
+        if color:
+            return color.lower()
+    raise AssertionError(f"pygments style '{style_name}' has no token color")
+
+
+class TestLayoutPaletteMatrix:
+    """default 版式 × 8 个内置色板的全组合冒烟。
+
+    The layout is rendered through ``theme_engine.render_css`` (the CLI's
+    ``--layout``/``--palette`` path) and must satisfy the same WeChat-safe
+    contracts as the preset path for every palette.
+    """
+
+    @pytest.mark.parametrize("palette_name", sorted(BUILTIN_THEMES))
+    def test_default_layout_x_palette_smoke(self, palette_name: str):
+        palette = theme_engine.load_palette(palette_name)
+        css = theme_engine.render_css("default", palette_name)
+        assert css.strip(), palette_name
+
+        raw = render_markdown_to_html(
+            SAMPLE_PATH.read_text(encoding="utf-8"),
+            pygments_style=pygments_style_for_palette(palette),
+        )
+        html = process_article_html(raw, css)
+
+        # Palette identity color (strong emphasis) survives inlining.
+        assert palette["strong_color"] in html, palette_name
+
+        # Code element carries the wu5 scroll contract verbatim.
+        pre_start = html.find("<pre")
+        assert pre_start != -1, palette_name
+        code_seg = html[pre_start: html.find("</code>", pre_start)]
+        assert "display:block" in code_seg, palette_name
+        assert "overflow-x:auto" in code_seg, palette_name
+        assert "-webkit-overflow-scrolling:touch" in code_seg, palette_name
+        assert "white-space:pre" in code_seg, palette_name
+
+        # Table scroll wrapper got the touch-scroll style inlined.
+        scroll_start = html.find('class="table-scroll"')
+        assert scroll_start != -1, palette_name
+        scroll_seg = html[scroll_start: html.find("<table", scroll_start)]
+        assert "-webkit-overflow-scrolling:touch" in scroll_seg, palette_name
+
+        # Copy button is an absolutely positioned span in the body.
+        copy_start = html.find('class="copy-btn"')
+        assert copy_start != -1, palette_name
+        tag_start = html.rfind("<span", 0, copy_start)
+        tag_end = html.find(">", copy_start)
+        btn_style = re.search(r'style="([^"]*)"', html[tag_start:tag_end])
+        assert btn_style is not None, palette_name
+        assert "position:absolute" in btn_style.group(1), palette_name
+
+        # code_scheme drives the pygments style: the mapped palette's
+        # representative token color appears in the highlighted code.
+        token_color = _pygments_token_color(palette["code_scheme"])
+        assert f"color:#{token_color}" in html, (palette_name, token_color)

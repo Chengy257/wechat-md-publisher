@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
+import yaml
+
 from .config import (
     BUILTIN_THEMES,
     ArticleMetadata,
@@ -23,7 +25,6 @@ from .config import (
     load_publish_config,
     resolve_config,
     resolve_credentials,
-    resolve_theme_css,
 )
 from .draft import DraftArticle, add_draft, build_draft_payload, validate_publish_preflight
 from .errors import RemoteDraftCreatedLocalStateFailed, WeChatAPIError
@@ -32,7 +33,7 @@ from .images import compress_cover, process_images, upload_cover_image
 from .render import (
     _wrap_preview,
     parse_front_matter,
-    pygments_style_for_theme,
+    pygments_style_for_palette,
     render_article,
     render_markdown_to_html,
 )
@@ -42,6 +43,7 @@ from .state import (
     save_post_snapshot,
     write_text_atomic,
 )
+from .theme_engine import list_layouts, list_palettes, resolve_selection
 from .token import get_access_token, mask_appid, mask_token
 
 _T = TypeVar("_T")
@@ -55,6 +57,34 @@ _PROJECT_NAME_MARKER = 'name = "wechat-md-publisher"'
 
 class _Abort(RuntimeError):
     """Internal: abort the current command with a user-facing message."""
+
+
+def _palette_choices() -> list[str]:
+    """Palette names for argparse ``choices`` (builtin + current project's).
+
+    Discovery uses the project directory implied by the current working
+    directory at parser-build time; ``resolve_selection`` re-validates the
+    final name fail-closed against the actual project directory.
+    """
+    try:
+        return list_palettes(_discover_project_dir(Path.cwd()))
+    except OSError:
+        return list_palettes()
+
+
+def _add_theme_args(p: argparse.ArgumentParser) -> None:
+    """Attach the theme/style selection flags shared by the render commands."""
+    p.add_argument("--style", type=Path, default=None,
+                   help="Path to CSS file (highest priority; overrides "
+                        "--theme/--layout/--palette)")
+    p.add_argument("--theme", default=None, choices=sorted(BUILTIN_THEMES),
+                   help="Built-in theme preset (layout + palette bundle)")
+    p.add_argument("--layout", default=None, choices=list_layouts(),
+                   help="Built-in layout (structure; independent of colors); "
+                        "pairs with --palette")
+    p.add_argument("--palette", default=None, choices=_palette_choices(),
+                   help="Color palette: built-in name or a project "
+                        "config/palettes/*.json (same-name overrides builtin)")
 
 
 def _discover_project_dir(start: Path) -> Path:
@@ -128,10 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Output WeChat HTML path")
     render_p.add_argument("--preview-out", type=Path, default=Path("build/article.preview.html"),
                           help="Output preview HTML path")
-    render_p.add_argument("--style", type=Path, default=None,
-                          help="Path to CSS theme file (overrides --theme)")
-    render_p.add_argument("--theme", default=None, choices=sorted(BUILTIN_THEMES),
-                          help="Built-in theme name")
+    _add_theme_args(render_p)
 
     # --- draft ---
     draft_p = subparsers.add_parser("draft", help="Create a WeChat draft from Markdown.")
@@ -148,10 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
     draft_p.add_argument("--cover", type=Path, help="Override cover image path")
     draft_p.add_argument("--config", type=Path, default=Path("config/publish.yaml"),
                          help="Path to publish config YAML")
-    draft_p.add_argument("--style", type=Path, default=None,
-                         help="Path to CSS theme file (overrides --theme)")
-    draft_p.add_argument("--theme", default=None, choices=sorted(BUILTIN_THEMES),
-                         help="Built-in theme name")
+    _add_theme_args(draft_p)
     draft_p.add_argument("--ai-summary", action="store_true",
                          help="Generate article digest via AI when not specified")
     draft_p.add_argument("--ai-cover", action="store_true",
@@ -184,10 +208,7 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_p.add_argument("--author", help="Override article author")
     inspect_p.add_argument("--digest", help="Override article digest")
     inspect_p.add_argument("--cover", type=Path, help="Override cover image path")
-    inspect_p.add_argument("--style", type=Path, default=None,
-                           help="Path to CSS theme file (overrides --theme)")
-    inspect_p.add_argument("--theme", default=None, choices=sorted(BUILTIN_THEMES),
-                           help="Built-in theme name")
+    _add_theme_args(inspect_p)
 
     return parser
 
@@ -200,6 +221,62 @@ def _resolve_cli_values(args: argparse.Namespace) -> dict[str, Any]:
         if val is not None:
             values[key] = str(val)
     return values
+
+
+def _load_theme_config_defaults(path: Path) -> Mapping[str, Any]:
+    """Quietly read a publish.yaml for theme defaults (missing file -> ``{}``).
+
+    Used by the render command, which historically ignores publish.yaml
+    entirely except for the optional ``layout``/``palette`` default keys; a
+    broken YAML is treated as absent instead of aborting a pure preview run.
+    """
+    if not path.exists():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _apply_theme_config_defaults(
+    args: argparse.Namespace, pub_cfg: Mapping[str, Any]
+) -> tuple[str | None, str | None]:
+    """Merge --layout/--palette CLI flags with publish.yaml defaults.
+
+    publish.yaml ``layout``/``palette`` act as defaults; explicit CLI flags
+    win. Missing keys (CLI or config) resolve to ``None`` so the default
+    behavior is unchanged.
+    """
+    layout = getattr(args, "layout", None)
+    if layout is None:
+        cfg_layout = pub_cfg.get("layout")
+        layout = cfg_layout if isinstance(cfg_layout, str) and cfg_layout else None
+    palette = getattr(args, "palette", None)
+    if palette is None:
+        cfg_palette = pub_cfg.get("palette")
+        palette = cfg_palette if isinstance(cfg_palette, str) and cfg_palette else None
+    return layout, palette
+
+
+def _resolve_theme_assets(
+    args: argparse.Namespace, project: Path, pub_cfg: Mapping[str, Any]
+) -> tuple[str, Mapping[str, str] | None]:
+    """Resolve (theme CSS, palette) for a render/draft/inspect run.
+
+    Resolution chain: ``--style`` file > ``--layout``/``--palette`` >
+    ``--theme`` preset > publish.yaml ``layout``/``palette`` defaults are
+    applied underneath the CLI flags > project ``config/style.css`` >
+    engine ``default`` preset x ``default`` palette.
+    """
+    layout, palette_name = _apply_theme_config_defaults(args, pub_cfg)
+    return resolve_selection(
+        style_arg=args.style,
+        layout_arg=layout,
+        palette_arg=palette_name,
+        theme_arg=getattr(args, "theme", None),
+        project_dir=project,
+    )
 
 
 def _run_with_token_retry(
@@ -283,8 +360,8 @@ def cmd_render(args: argparse.Namespace) -> int:
         return 1
 
     project = _resolve_project_dir(args)
-    theme_css = resolve_theme_css(
-        style_arg=args.style, theme_arg=args.theme, project_dir=project
+    theme_css, palette = _resolve_theme_assets(
+        args, project, _load_theme_config_defaults(project / _DEFAULT_CONFIG)
     )
 
     result = render_article(
@@ -293,7 +370,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         build_dir=args.out.parent if args.out else None,
         preview_path=args.preview_out,
         wechat_path=args.out,
-        pygments_style=pygments_style_for_theme(args.theme),
+        pygments_style=pygments_style_for_palette(palette),
     )
 
     print(f"[OK] preview: {result.preview_path}")
@@ -368,9 +445,7 @@ def _render_stage(args: argparse.Namespace, write_outputs: bool = True) -> _Draf
 
     project = _resolve_project_dir(args)
     pub_cfg = load_publish_config(project / args.config)
-    theme_css = resolve_theme_css(
-        style_arg=args.style, theme_arg=args.theme, project_dir=project
-    )
+    theme_css, palette = _resolve_theme_assets(args, project, pub_cfg)
     env = load_env_values(project)
     cli_values = _resolve_cli_values(args)
 
@@ -411,7 +486,7 @@ def _render_stage(args: argparse.Namespace, write_outputs: bool = True) -> _Draf
         )
 
     raw_html = render_markdown_to_html(
-        body, pygments_style=pygments_style_for_theme(getattr(args, "theme", None))
+        body, pygments_style=pygments_style_for_palette(palette)
     )
     build_dir = config.build_dir
     preview_path = build_dir / "article.preview.html"

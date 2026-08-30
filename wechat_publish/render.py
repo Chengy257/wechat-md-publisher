@@ -56,18 +56,45 @@ def parse_front_matter(markdown_text: str) -> tuple[Mapping[str, object], str]:
 
 _DEFAULT_CODE_STYLE = "friendly"
 
-# Themes whose code blocks have a dark background pair with a dark pygments
-# palette: tokens rendered with the light "friendly" palette are barely
-# readable on dark backgrounds.
-_DARK_CODE_THEMES = {"elegant", "lapis", "tech", "nb"}
-_DARK_CODE_STYLE = "github-dark"
+
+def pygments_style_for_palette(palette: Mapping[str, str] | None) -> str:
+    """Return the pygments style matching a resolved palette's ``code_scheme``.
+
+    ``None`` (CSS came from a ``--style`` file or the project style sheet,
+    whose code background is unknown) yields the light default, matching the
+    historical no-``--theme`` behavior. Fail-closed on a scheme outside
+    ``theme_engine.VALID_CODE_SCHEMES``.
+    """
+    from .theme_engine import VALID_CODE_SCHEMES
+
+    if not palette:
+        return _DEFAULT_CODE_STYLE
+    scheme = palette.get("code_scheme", _DEFAULT_CODE_STYLE)
+    if scheme not in VALID_CODE_SCHEMES:
+        raise ValueError(
+            f"invalid code_scheme {scheme!r} "
+            f"(expected one of: {', '.join(VALID_CODE_SCHEMES)})"
+        )
+    return scheme
 
 
 def pygments_style_for_theme(theme: str | None) -> str:
-    """Return the pygments palette matching a bundled theme's code background."""
-    if (theme or "").lower() in _DARK_CODE_THEMES:
-        return _DARK_CODE_STYLE
-    return _DEFAULT_CODE_STYLE
+    """Return the pygments palette matching a bundled theme preset's palette.
+
+    The mapping is derived from the preset palette's ``code_scheme`` (the
+    retired ``_DARK_CODE_THEMES`` set is now preset metadata): dark code
+    backgrounds (elegant / lapis / tech / nb) declare ``github-dark``, the
+    light ones declare ``friendly``. Unknown themes yield the light default.
+    """
+    if not theme:
+        return _DEFAULT_CODE_STYLE
+    from .config import THEME_PRESETS  # lazy: config owns the preset registry
+    from .theme_engine import load_palette
+
+    preset = THEME_PRESETS.get(theme.lower())
+    if preset is None:
+        return _DEFAULT_CODE_STYLE
+    return pygments_style_for_palette(load_palette(preset[1]))
 
 
 def _make_pygments_formatter(style_name: str = _DEFAULT_CODE_STYLE) -> HtmlFormatter:

@@ -318,7 +318,11 @@ def load_publish_config(path: Path) -> Mapping[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-_KNOWN_CONFIG_KEYS = {"default_author", "article", "paths", "wechat", "ai", "remote_images"}
+_KNOWN_CONFIG_KEYS = {
+    "default_author", "article", "paths", "wechat", "ai", "remote_images",
+    # Theme engine defaults (CLI --layout/--palette override these)
+    "layout", "palette",
+}
 
 
 def resolve_config(

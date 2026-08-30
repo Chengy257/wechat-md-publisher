@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from wechat_publish.config import load_preset_css
+from wechat_publish import theme_engine
+from wechat_publish.config import BUILTIN_THEMES, load_preset_css
 from wechat_publish.html_processor import process_article_html
 from wechat_publish.render import (
     parse_front_matter,
+    pygments_style_for_palette,
     pygments_style_for_theme,
     render_article,
     render_markdown_to_html,
@@ -194,6 +196,34 @@ class TestPygmentsStyleSelection:
         assert 'style="color:' in dark
         # Both keep the code structure intact
         assert "<pre><code" in light and "<pre><code" in dark
+
+
+class TestPygmentsStyleForPalette:
+    """palette["code_scheme"] drives the pygments style (WU-B refactor)."""
+
+    def test_none_or_empty_palette_yields_light_default(self):
+        assert pygments_style_for_palette(None) == "friendly"
+        assert pygments_style_for_palette({}) == "friendly"
+
+    def test_code_scheme_mapping(self):
+        assert pygments_style_for_palette({"code_scheme": "friendly"}) == "friendly"
+        assert (
+            pygments_style_for_palette({"code_scheme": "github-dark"})
+            == "github-dark"
+        )
+
+    def test_invalid_code_scheme_fails_closed(self):
+        with pytest.raises(ValueError, match="code_scheme"):
+            pygments_style_for_palette({"code_scheme": "monokai"})
+
+    def test_builtin_palettes_reproduce_legacy_dark_set(self):
+        # The palette-driven mapping must match the retired
+        # render._DARK_CODE_THEMES result for every builtin theme.
+        legacy_dark = {"elegant", "lapis", "tech", "nb"}
+        for name in sorted(BUILTIN_THEMES):
+            palette = theme_engine.load_palette(name)
+            expected = "github-dark" if name in legacy_dark else "friendly"
+            assert pygments_style_for_palette(palette) == expected, name
 
 
 # ── Bundled theme smoke: fancy / nb / filling ────────────────────

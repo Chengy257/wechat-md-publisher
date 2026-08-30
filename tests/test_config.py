@@ -1,5 +1,6 @@
 """Configuration tests: YAML loading, precedence, front matter, credentials."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,12 @@ from wechat_publish.config import (
     resolve_credentials,
     resolve_style_path,
     resolve_theme_css,
+)
+from wechat_publish.theme_engine import (
+    list_palettes,
+    load_palette,
+    render_css,
+    resolve_selection,
 )
 
 # ── YAML loading ────────────────────────────────────────────────
@@ -326,3 +333,156 @@ class TestResolveStylePath:
         assert result is None
         css = resolve_theme_css(style_arg=None, theme_arg=None, project_dir=tmp_path)
         assert ".wechat-content" in css
+
+
+# ── 配色 × 版式: resolve_selection / project palettes ────────────
+
+
+def _minimal_palette(**overrides: str) -> dict[str, str]:
+    """A palette dict passing load_palette validation (test extras allowed)."""
+    from wechat_publish import theme_engine
+
+    palette = {key: "#000" for key in theme_engine.PALETTE_REQUIRED_KEYS}
+    palette["code_scheme"] = "friendly"
+    palette.update(overrides)
+    return palette
+
+
+class TestResolveSelection:
+    """Unified --style > --layout/--palette > --theme > default resolution."""
+
+    def test_style_file_wins_and_palette_is_none(self, tmp_path: Path):
+        style = tmp_path / "custom.css"
+        style.write_text("/* custom */ h1 { color: red; }", encoding="utf-8")
+        css, palette = resolve_selection(
+            style_arg=style, layout_arg="default", palette_arg="nb",
+            theme_arg="nb", project_dir=tmp_path,
+        )
+        assert css == "/* custom */ h1 { color: red; }"
+        assert palette is None  # code background unknown -> pygments friendly
+
+    def test_layout_palette_pair_renders_via_engine(self, tmp_path: Path):
+        css, palette = resolve_selection(
+            style_arg=None, layout_arg="default", palette_arg="nb",
+            theme_arg=None, project_dir=tmp_path,
+        )
+        assert css == render_css("default", "nb")
+        assert palette is not None
+        assert palette["_source"] == "builtin"
+        assert palette["code_scheme"] == "github-dark"
+
+    def test_omitted_side_of_the_pair_defaults(self, tmp_path: Path):
+        css, palette = resolve_selection(
+            style_arg=None, layout_arg=None, palette_arg="lapis",
+            theme_arg=None, project_dir=tmp_path,
+        )
+        assert css == render_css("default", "lapis")
+        assert palette is not None and palette["code_scheme"] == "github-dark"
+
+    def test_theme_preset_path_uses_preset_palette(self):
+        css, palette = resolve_selection(
+            style_arg=None, layout_arg=None, palette_arg=None,
+            theme_arg="lapis", project_dir=None,
+        )
+        assert css == load_preset_css("lapis")
+        assert palette is not None
+        assert palette["code_scheme"] == "github-dark"
+
+    def test_no_args_falls_back_to_engine_default(self, tmp_path: Path):
+        css, palette = resolve_selection(
+            style_arg=None, layout_arg=None, palette_arg=None,
+            theme_arg=None, project_dir=tmp_path,
+        )
+        assert css == load_preset_css("default")
+        assert palette is not None and palette["_source"] == "builtin"
+
+    def test_no_args_project_style_sheet_still_wins(self, tmp_path: Path):
+        project_style = tmp_path / "config" / "style.css"
+        project_style.parent.mkdir(parents=True)
+        project_style.write_text("/* project style */", encoding="utf-8")
+        css, palette = resolve_selection(
+            style_arg=None, layout_arg=None, palette_arg=None,
+            theme_arg=None, project_dir=tmp_path,
+        )
+        assert css == "/* project style */"
+        assert palette is None
+
+    def test_unknown_theme_fails_closed(self):
+        with pytest.raises(ValueError, match="unknown theme preset 'nope'"):
+            resolve_selection(
+                style_arg=None, layout_arg=None, palette_arg=None,
+                theme_arg="nope", project_dir=None,
+            )
+
+    def test_unknown_layout_fails_closed(self):
+        with pytest.raises(ValueError, match="unknown layout 'nope'"):
+            resolve_selection(
+                style_arg=None, layout_arg="nope", palette_arg="default",
+                theme_arg=None, project_dir=None,
+            )
+
+    def test_unknown_palette_fails_closed(self):
+        with pytest.raises(ValueError, match="unknown palette 'nope'"):
+            resolve_selection(
+                style_arg=None, layout_arg=None, palette_arg="nope",
+                theme_arg=None, project_dir=None,
+            )
+
+    def test_placeholder_layouts_fail_closed(self):
+        from wechat_publish.theme_engine import BUILTIN_LAYOUTS
+
+        for name in ("serif", "terminal", "card", "classic"):
+            assert name in BUILTIN_LAYOUTS
+            with pytest.raises(ValueError, match="版式文件未实现"):
+                resolve_selection(
+                    style_arg=None, layout_arg=name, palette_arg="default",
+                    theme_arg=None, project_dir=None,
+                )
+
+
+class TestProjectPalettes:
+    """<project>/config/palettes/*.json discovery and same-name override."""
+
+    def _write_project_palette(self, project_dir: Path, name: str, data: dict) -> Path:
+        pdir = project_dir / "config" / "palettes"
+        pdir.mkdir(parents=True, exist_ok=True)
+        path = pdir / f"{name}.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return path
+
+    def test_project_palette_overrides_builtin_same_name(self, tmp_path: Path):
+        from wechat_publish import theme_engine
+
+        builtin_path = theme_engine._PALETTES_DIR / "nb.json"
+        data = json.loads(builtin_path.read_text(encoding="utf-8"))
+        data["strong_color"] = "#123456"
+        self._write_project_palette(tmp_path, "nb", data)
+
+        palette = load_palette("nb", project_dir=tmp_path)
+        assert palette["strong_color"] == "#123456"
+        assert palette["_source"] == "project"
+        # The builtin palette is untouched.
+        assert load_palette("nb")["_source"] == "builtin"
+        assert load_palette("nb")["strong_color"] != "#123456"
+
+    def test_project_extra_palette_is_discovered(self, tmp_path: Path):
+        self._write_project_palette(
+            tmp_path, "corp", _minimal_palette(strong_color="#abcdef")
+        )
+        assert "corp" in list_palettes(tmp_path)
+        assert "corp" not in list_palettes()
+        palette = load_palette("corp", project_dir=tmp_path)
+        assert palette["_source"] == "project"
+
+    def test_project_palette_missing_key_fails_closed(self, tmp_path: Path):
+        self._write_project_palette(tmp_path, "broken", {"text": "#000"})
+        with pytest.raises(ValueError, match="missing required key"):
+            load_palette("broken", project_dir=tmp_path)
+
+    def test_list_layouts_covers_registry(self):
+        from wechat_publish.theme_engine import BUILTIN_LAYOUTS, list_layouts
+
+        assert list_layouts() == sorted(BUILTIN_LAYOUTS)
+        assert set(BUILTIN_LAYOUTS) == {
+            "default", "serif", "terminal", "card", "classic",
+        }
