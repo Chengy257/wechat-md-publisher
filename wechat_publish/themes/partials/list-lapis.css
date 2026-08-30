@@ -1,0 +1,6 @@
+/* 列表容器 — lapis */
+.wechat-content ul,
+.wechat-content ol {
+  margin-bottom: 16px;
+  padding-left: 24px;
+}

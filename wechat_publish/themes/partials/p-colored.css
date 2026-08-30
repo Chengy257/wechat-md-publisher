@@ -1,0 +1,7 @@
+/* 段落 — 带文字色（simple tech） */
+.wechat-content p {
+  margin: $p_margin;
+  color: $text;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}

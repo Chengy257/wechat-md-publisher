@@ -39,7 +39,7 @@ wechat-publish = "wechat_publish.cli:main"
 include = ["wechat_publish*"]
 
 [tool.setuptools.package-data]
-wechat_publish = ["themes/*.css"]
+wechat_publish = ["themes/*.css", "themes/partials/*.css", "palettes/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

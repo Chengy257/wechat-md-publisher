@@ -1,0 +1,7 @@
+/* 代码块内 code — lapis */
+.wechat-content pre code {
+  background-color: transparent;
+  padding: 0;
+  color: $pre_code_color;
+  font-size: 13px;
+}

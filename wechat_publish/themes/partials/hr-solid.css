@@ -1,0 +1,7 @@
+/* 分隔线 — 实色型（default elegant tech fancy nb filling） */
+.wechat-content hr {
+  border: none;
+  height: 1px;
+  background: $hr_color;
+  margin: 2em 0;
+}

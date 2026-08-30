@@ -1,0 +1,7 @@
+/* 表格 — 经典型（default elegant simple tech fancy nb filling） */
+.wechat-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 13px;
+}

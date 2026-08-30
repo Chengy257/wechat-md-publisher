@@ -1,0 +1,9 @@
+/* 代码块容器 — lapis */
+.wechat-content pre {
+  background-color: $code_bg;
+  padding: 16px;
+  overflow: auto;
+  border-radius: $radius;
+  margin-bottom: 16px;
+  color: $pre_color;
+}

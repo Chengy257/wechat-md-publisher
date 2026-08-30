@@ -1,0 +1,11 @@
+/* 二级标题 — 左侧竖条型（nb） */
+.wechat-content h2 {
+  padding-left: 12px;
+  border-left: 4px solid $h2_accent;
+  margin: 2em 0 1.25em;
+  color: $h2_color;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: left;
+  line-height: 1.4;
+}

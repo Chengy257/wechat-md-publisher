@@ -1,0 +1,12 @@
+/* 二级标题 — 实心胶囊型（default elegant） */
+.wechat-content h2 {
+  display: table;
+  padding: 0.2em 1.2em;
+  margin: 2em auto 1.25em;
+  color: $h2_color;
+  background: $h2_bg;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  border-radius: $h2_radius;
+}

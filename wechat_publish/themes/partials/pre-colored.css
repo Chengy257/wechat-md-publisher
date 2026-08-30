@@ -1,0 +1,11 @@
+/* 代码块容器 — 深色无框带文字色型（elegant nb） */
+.wechat-content pre {
+  font-size: 14px;
+  overflow-x: auto;
+  border-radius: $radius;
+  padding: 16px;
+  line-height: 1.6;
+  margin: 1em 0;
+  background: $code_bg;
+  color: $pre_color;
+}

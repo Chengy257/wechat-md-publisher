@@ -1,0 +1,9 @@
+/* 行内代码 — lapis */
+.wechat-content code {
+  font-family: $code_font;
+  background-color: $code_inline_bg;
+  padding: $code_inline_padding;
+  border-radius: 3px;
+  font-size: 14px;
+  color: $code_inline_color;
+}

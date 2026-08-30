@@ -1,0 +1,21 @@
+/* 三级标题 — 左侧竖条型，simple 声明顺序 */
+.wechat-content h3 {
+  padding-left: $h3_padding;
+  font-size: 17px;
+  font-weight: bold;
+  color: $h3_color;
+  border-left: 3px solid $h3_border;
+  margin: $h3_margin;
+  line-height: 1.4;
+}
+
+.wechat-content .h3-like {
+  padding-left: $h3_padding;
+  font-size: 17px;
+  font-weight: bold;
+  color: $h3_color;
+  border-left: 3px solid $h3_border;
+  margin: $h3_margin;
+  line-height: 1.4;
+  text-align: left;
+}

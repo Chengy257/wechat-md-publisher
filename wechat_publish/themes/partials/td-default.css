@@ -1,0 +1,7 @@
+/* 单元格 — 经典型（default elegant simple tech fancy nb filling） */
+.wechat-content th,
+.wechat-content td {
+  border: 1px solid $table_border;
+  padding: 5px 8px;
+  text-align: left;
+}

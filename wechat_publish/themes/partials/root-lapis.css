@@ -1,0 +1,8 @@
+/* 根容器 — lapis（无 letter-spacing，行高 1.8） */
+.wechat-content {
+  font-family: $root_font;
+  font-size: 16px;
+  line-height: 1.8;
+  color: $text;
+  overflow-wrap: break-word;
+}

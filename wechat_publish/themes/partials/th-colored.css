@@ -1,0 +1,6 @@
+/* 表头 — 带文字色（elegant simple tech） */
+.wechat-content th {
+  font-weight: bold;
+  background: $th_bg;
+  color: $th_color;
+}

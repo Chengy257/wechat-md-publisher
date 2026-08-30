@@ -1,0 +1,10 @@
+/* 引用 — lapis（字号上提，无 blockquote p 规则） */
+.wechat-content blockquote {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background-color: $blockquote_bg;
+  border-left: $blockquote_border_width solid $blockquote_border;
+  color: $blockquote_color;
+  font-size: 15px;
+  border-radius: 0 4px 4px 0;
+}

@@ -116,18 +116,123 @@ def load_theme_css(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def load_preset_css(name: str) -> str:
+    """Render a builtin theme preset through the theme engine."""
+    from .theme_engine import render_preset_css
+
+    return render_preset_css(name)
+
+
 BUILTIN_THEMES = {
     "default", "elegant", "lapis", "simple", "tech",
     "fancy", "nb", "filling",
 }
 
-_THEMES_DIR = Path(__file__).resolve().parent / "themes"
+# Theme engine preset registry: theme name -> (partials sequence, palette).
+# Each preset reproduces its retired per-theme CSS file byte-for-byte at the
+# WeChat-HTML level. ORDER IS LOAD-BEARING: premailer inlines matched rules
+# in CSS order, so the base template plus this partial sequence must keep the
+# retired file's rule order — do not reorder without re-running the golden
+# baseline (tests/test_theme_golden.py, scripts/make_theme_golden.py --check).
+THEME_PRESETS: dict[str, tuple[tuple[str, ...], str]] = {
+    "default": (
+        (
+            "root-standard", "h1-table", "h2-pill", "h3-leftbar",
+            "p-default", "blockquote-serif", "list-default", "li-default",
+            "img-plain", "inline-code", "pre-default", "pre-code-default",
+            "a-bordered", "figcaption", "hr-solid", "table-default",
+            "td-default", "th-plain", "th-nowrap", "list-item-default",
+            "footnotes-default", "footnotes-ol", "footnotes-li",
+            "codeblock-pre", "codeblock-pre-code",
+        ),
+        "default",
+    ),
+    "elegant": (
+        (
+            "root-standard", "h1-table", "h2-pill", "h3-leftbar",
+            "p-default", "blockquote-serif", "list-default", "li-default",
+            "img-plain", "inline-code", "pre-colored", "pre-code-default",
+            "a-bordered", "figcaption", "hr-solid", "table-default",
+            "td-default", "th-colored", "th-nowrap", "list-item-default",
+            "footnotes-default", "footnotes-ol", "footnotes-li",
+            "codeblock-pre", "codeblock-pre-code",
+        ),
+        "elegant",
+    ),
+    "lapis": (
+        (
+            "root-lapis", "h1-lapis", "h2-leftbar-bg", "h3-plain",
+            "p-lapis", "blockquote-lapis", "list-lapis", "li-lapis",
+            "img-lapis", "inline-code-lapis", "pre-lapis", "pre-code-lapis",
+            "a-bordered", "hr-lapis", "table-lapis", "td-lapis", "th-lapis",
+            "tr-nth-even", "th-nowrap", "list-item-lapis",
+            "footnotes-lapis", "footnotes-ol", "footnotes-li",
+            "codeblock-pre", "codeblock-pre-code",
+        ),
+        "lapis",
+    ),
+    "simple": (
+        (
+            "root-standard", "h1-simple", "h2-capsule", "h3-leftbar-simple",
+            "p-colored", "blockquote-simple", "list-default", "li-default",
+            "img-bordered", "inline-code", "pre-default", "pre-code-default",
+            "a-plain", "figcaption", "hr-simple", "table-default",
+            "td-default", "th-colored", "th-nowrap", "list-item-default",
+            "footnotes-default", "footnotes-ol", "footnotes-li",
+            "codeblock-pre", "codeblock-pre-code",
+        ),
+        "simple",
+    ),
+    "tech": (
+        (
+            "root-tech", "h1-table", "h2-leftbar-bottomline", "h3-leftbar",
+            "p-colored", "blockquote-tech", "list-default", "li-default",
+            "img-bordered", "inline-code", "pre-default", "pre-code-default",
+            "a-plain", "figcaption", "hr-solid", "table-default",
+            "td-default", "th-colored", "th-nowrap", "list-item-default",
+            "footnotes-default", "footnotes-ol", "footnotes-li",
+            "codeblock-pre", "codeblock-pre-code",
+        ),
+        "tech",
+    ),
+    "fancy": (
+        (
+            "root-standard", "h1-table", "h2-bottomline", "h3-leftbar",
+            "p-default", "blockquote-serif", "list-default", "li-default",
+            "img-plain", "inline-code", "pre-default", "pre-code-default",
+            "a-bordered", "figcaption", "hr-solid", "table-default",
+            "td-default", "th-plain", "th-nowrap", "list-item-default",
+            "footnotes-default", "footnotes-ol", "footnotes-li",
+            "codeblock-pre", "codeblock-pre-code",
+        ),
+        "fancy",
+    ),
+    "nb": (
+        (
+            "root-standard", "h1-table", "h2-leftbar", "h3-leftbar",
+            "p-default", "blockquote-serif", "list-default", "li-default",
+            "img-plain", "inline-code", "pre-colored", "pre-code-default",
+            "a-bordered", "figcaption", "hr-solid", "table-default",
+            "td-default", "th-plain", "th-nowrap", "list-item-default",
+            "footnotes-default", "footnotes-ol", "footnotes-li",
+            "codeblock-pre", "codeblock-pre-code",
+        ),
+        "nb",
+    ),
+    "filling": (
+        (
+            "root-standard", "h1-table", "h2-bottomline", "h3-leftbar",
+            "p-default", "blockquote-serif", "list-default", "li-default",
+            "img-plain", "inline-code", "pre-default", "pre-code-default",
+            "a-bordered", "figcaption", "hr-solid", "table-default",
+            "td-default", "th-plain", "th-nowrap", "list-item-default",
+            "footnotes-default", "footnotes-ol", "footnotes-li",
+            "codeblock-pre", "codeblock-pre-code",
+        ),
+        "filling",
+    ),
+}
 
-
-def _builtin_theme_path(name: str) -> Path | None:
-    """Return a bundled theme CSS path, or None when not shipped."""
-    candidate = _THEMES_DIR / f"{name}.css"
-    return candidate if candidate.exists() else None
 
 
 def resolve_style_path(
@@ -135,25 +240,46 @@ def resolve_style_path(
     style_arg: Path | None,
     theme_arg: str | None,
     project_dir: Path,
-) -> Path:
-    """Resolve the CSS theme path from CLI args.
+) -> Path | None:
+    """Resolve the CSS *file* path from CLI args (engine presets excluded).
 
-    Priority: --style > --theme > project config/style.css > bundled
-    default.css (so a default run always gets styled, sanitized output).
+    Priority: --style > project config/style.css. Theme presets are rendered
+    by the theme engine, not read from files: a truthy *theme_arg* (or a
+    missing project style sheet) yields ``None`` and callers should fall back
+    to :func:`resolve_theme_css` / :func:`load_preset_css` (default preset).
     """
     if style_arg is not None:
         return style_arg
-    if theme_arg and theme_arg in BUILTIN_THEMES:
-        builtin = _builtin_theme_path(theme_arg)
-        if builtin is not None:
-            return builtin
+    if theme_arg:
+        return None
     project_style = project_dir / "config" / "style.css"
     if project_style.exists():
         return project_style
-    builtin_default = _builtin_theme_path("default")
-    if builtin_default is not None:
-        return builtin_default
-    return project_style
+    return None
+
+
+def resolve_theme_css(
+    *,
+    style_arg: Path | None,
+    theme_arg: str | None,
+    project_dir: Path,
+) -> str:
+    """Resolve the theme CSS text for a render/draft/inspect run.
+
+    Priority: --style (file, read verbatim) > --theme (engine preset) >
+    project config/style.css (file) > engine ``default`` preset, so a
+    default run always gets styled, sanitized output.
+    """
+    if style_arg is not None:
+        return load_theme_css(Path(style_arg))
+    if theme_arg:
+        return load_preset_css(theme_arg)
+    style_path = resolve_style_path(
+        style_arg=None, theme_arg=None, project_dir=project_dir
+    )
+    if style_path is not None:
+        return load_theme_css(style_path)
+    return load_preset_css("default")
 
 
 def normalize_string_or_list(value: Any, *, field: str) -> list[str]:

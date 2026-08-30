@@ -1,0 +1,10 @@
+/* 二级标题 — 圆角胶囊型（simple） */
+.wechat-content h2 {
+  padding: 0.3em 1.2em;
+  font-size: 18px;
+  font-weight: bold;
+  color: $h2_color;
+  background: $h2_bg;
+  border-radius: $h2_radius;
+  margin: 2em 0 1em;
+}

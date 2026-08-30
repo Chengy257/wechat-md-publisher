@@ -1,0 +1,7 @@
+/* 脚注区 — lapis（无文字色） */
+.footnotes {
+  margin-top: $footnotes_margin_top;
+  padding-top: $footnotes_padding_top;
+  border-top: 1px solid $footnotes_border;
+  font-size: 14px;
+}

@@ -1,0 +1,6 @@
+/* 表头 — lapis */
+.wechat-content th {
+  background-color: $th_bg;
+  color: $th_color;
+  font-weight: bold;
+}

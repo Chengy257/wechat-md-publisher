@@ -1,0 +1,5 @@
+/* 链接 — 无下边框型（simple tech） */
+.wechat-content a {
+  color: $link;
+  text-decoration: none;
+}

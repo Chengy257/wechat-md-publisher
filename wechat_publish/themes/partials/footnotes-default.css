@@ -1,0 +1,8 @@
+/* 脚注区 — 经典型（default elegant simple tech fancy nb filling） */
+.footnotes {
+  margin-top: $footnotes_margin_top;
+  padding-top: $footnotes_padding_top;
+  border-top: 1px solid $footnotes_border;
+  font-size: 14px;
+  color: $footnotes_color;
+}

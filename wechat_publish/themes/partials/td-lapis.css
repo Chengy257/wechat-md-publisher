@@ -1,0 +1,6 @@
+/* 单元格 — lapis */
+.wechat-content th,
+.wechat-content td {
+  border: 1px solid $table_border;
+  padding: 5px 8px;
+}

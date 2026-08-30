@@ -21,10 +21,9 @@ from .config import (
     account_scoped_paths,
     load_env_values,
     load_publish_config,
-    load_theme_css,
     resolve_config,
     resolve_credentials,
-    resolve_style_path,
+    resolve_theme_css,
 )
 from .draft import DraftArticle, add_draft, build_draft_payload, validate_publish_preflight
 from .errors import RemoteDraftCreatedLocalStateFailed, WeChatAPIError
@@ -284,10 +283,9 @@ def cmd_render(args: argparse.Namespace) -> int:
         return 1
 
     project = _resolve_project_dir(args)
-    style_path = resolve_style_path(
+    theme_css = resolve_theme_css(
         style_arg=args.style, theme_arg=args.theme, project_dir=project
     )
-    theme_css = load_theme_css(style_path)
 
     result = render_article(
         md_path,
@@ -370,10 +368,9 @@ def _render_stage(args: argparse.Namespace, write_outputs: bool = True) -> _Draf
 
     project = _resolve_project_dir(args)
     pub_cfg = load_publish_config(project / args.config)
-    style_path = resolve_style_path(
+    theme_css = resolve_theme_css(
         style_arg=args.style, theme_arg=args.theme, project_dir=project
     )
-    theme_css = load_theme_css(style_path)
     env = load_env_values(project)
     cli_values = _resolve_cli_values(args)
 

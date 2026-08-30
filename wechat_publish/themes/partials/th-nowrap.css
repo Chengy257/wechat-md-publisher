@@ -1,0 +1,4 @@
+/* 表头不换行（全部主题） */
+.wechat-content th {
+  white-space: nowrap;
+}

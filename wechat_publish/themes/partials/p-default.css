@@ -1,0 +1,6 @@
+/* 段落 — 无独立文字色（default elegant fancy nb filling） */
+.wechat-content p {
+  margin: $p_margin;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}

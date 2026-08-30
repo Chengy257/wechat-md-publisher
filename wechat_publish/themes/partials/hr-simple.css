@@ -1,0 +1,7 @@
+/* 分隔线 — simple 渐变型 */
+.wechat-content hr {
+  border: none;
+  height: 1px;
+  margin: 2em 0;
+  background: $hr_color;
+}

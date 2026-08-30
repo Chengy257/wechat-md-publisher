@@ -1,0 +1,4 @@
+/* 偶数行兜底（lapis） */
+.wechat-content tr:nth-child(2n) {
+  background-color: $row_alt_bg;
+}

@@ -1,0 +1,7 @@
+/* 段落 — lapis（仅下边距 + 文字色） */
+.wechat-content p {
+  margin-bottom: 16px;
+  text-align: justify;
+  text-justify: inter-ideograph;
+  color: $muted;
+}

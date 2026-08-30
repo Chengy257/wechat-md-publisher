@@ -1,0 +1,9 @@
+/* 图片 — lapis（阴影） */
+.wechat-content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 20px auto;
+  border-radius: $img_radius;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}

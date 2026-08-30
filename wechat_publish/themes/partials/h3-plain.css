@@ -1,0 +1,17 @@
+/* 三级标题 — 无饰线型（lapis） */
+.wechat-content h3 {
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: 18px;
+  margin-bottom: 8px;
+  color: $h3_color;
+}
+
+.wechat-content .h3-like {
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: 18px;
+  margin-bottom: 8px;
+  color: $h3_color;
+  text-align: left;
+}

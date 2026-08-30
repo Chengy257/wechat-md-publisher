@@ -1,0 +1,16 @@
+/* 引用 — simple 斜体圆角型 */
+.wechat-content blockquote {
+  font-style: italic;
+  padding: 1em 1em 1em 1.5em;
+  border-left: $blockquote_border_width solid $blockquote_border;
+  color: $blockquote_color;
+  background: $blockquote_bg;
+  border-radius: 0 6px 6px 0;
+  margin: 1.2em 0;
+}
+
+.wechat-content blockquote p {
+  margin: 0;
+  font-size: 15px;
+  color: $muted;
+}

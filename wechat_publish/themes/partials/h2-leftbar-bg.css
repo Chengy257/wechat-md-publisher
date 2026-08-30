@@ -1,0 +1,12 @@
+/* 二级标题 — 左侧竖条 + 底色型（lapis） */
+.wechat-content h2 {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 20px;
+  margin-bottom: 12px;
+  color: $h2_color;
+  background-color: $h2_bg;
+  padding: 8px 12px;
+  border-radius: $h2_radius;
+  border-left: 5px solid $h2_accent;
+}

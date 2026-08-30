@@ -5,12 +5,14 @@ from pathlib import Path
 import pytest
 
 from wechat_publish.config import (
+    load_preset_css,
     load_publish_config,
     load_theme_css,
     normalize_string_or_list,
     resolve_config,
     resolve_credentials,
     resolve_style_path,
+    resolve_theme_css,
 )
 
 # ── YAML loading ────────────────────────────────────────────────
@@ -291,21 +293,24 @@ class TestResolveStylePath:
         assert result == custom
 
     def test_theme_loads_builtin(self):
+        # Theme presets are engine-rendered: resolve_style_path yields None
+        # and the CSS comes from load_preset_css.
         result = resolve_style_path(style_arg=None, theme_arg="default", project_dir=Path("/tmp"))
-        assert result.name == "default.css"
-        assert "themes" in str(result)
+        assert result is None
+        css = load_preset_css("default")
+        assert ".wechat-content" in css
 
     def test_theme_elegant(self):
-        result = resolve_style_path(style_arg=None, theme_arg="elegant", project_dir=Path("/tmp"))
-        assert result.name == "elegant.css"
+        assert resolve_style_path(style_arg=None, theme_arg="elegant", project_dir=Path("/tmp")) is None
+        assert "#3498db" in load_preset_css("elegant")
 
     def test_theme_simple(self):
-        result = resolve_style_path(style_arg=None, theme_arg="simple", project_dir=Path("/tmp"))
-        assert result.name == "simple.css"
+        assert resolve_style_path(style_arg=None, theme_arg="simple", project_dir=Path("/tmp")) is None
+        assert "#2c3e50" in load_preset_css("simple")
 
     def test_theme_tech(self):
-        result = resolve_style_path(style_arg=None, theme_arg="tech", project_dir=Path("/tmp"))
-        assert result.name == "tech.css"
+        assert resolve_style_path(style_arg=None, theme_arg="tech", project_dir=Path("/tmp")) is None
+        assert "#0d1117" in load_preset_css("tech")
 
     def test_project_style_css_wins_over_builtin(self, tmp_path: Path):
         project_style = tmp_path / "config" / "style.css"
@@ -314,7 +319,10 @@ class TestResolveStylePath:
         result = resolve_style_path(style_arg=None, theme_arg=None, project_dir=tmp_path)
         assert result == project_style
 
-    def test_no_theme_no_project_style_uses_bundled_default(self, tmp_path: Path):
+    def test_no_theme_no_project_style_uses_engine_default(self, tmp_path: Path):
+        # No --style/--theme and no project style sheet: resolve_style_path
+        # yields None and resolve_theme_css falls back to the engine default.
         result = resolve_style_path(style_arg=None, theme_arg=None, project_dir=tmp_path)
-        assert result.name == "default.css"
-        assert "themes" in str(result)
+        assert result is None
+        css = resolve_theme_css(style_arg=None, theme_arg=None, project_dir=tmp_path)
+        assert ".wechat-content" in css

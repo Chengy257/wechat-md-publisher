@@ -1,0 +1,10 @@
+/* 代码块滚动载体 code（全部主题；微信安全结构，逐字保留） */
+.wechat-content .codeblock pre code {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: pre;
+  background: transparent;
+  padding: 0;
+  line-height: 1.6;
+}

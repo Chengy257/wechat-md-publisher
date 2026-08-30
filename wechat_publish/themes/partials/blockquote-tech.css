@@ -1,0 +1,15 @@
+/* 引用 — tech 深色型（无 font-style） */
+.wechat-content blockquote {
+  padding: 1em 1em 1em 1.2em;
+  border-left: $blockquote_border_width solid $blockquote_border;
+  border-radius: 6px;
+  color: $blockquote_color;
+  background: $blockquote_bg;
+  margin: 1.2em 0;
+}
+
+.wechat-content blockquote p {
+  margin: 0;
+  font-size: 15px;
+  color: $muted;
+}

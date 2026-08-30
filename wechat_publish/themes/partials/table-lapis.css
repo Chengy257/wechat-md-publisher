@@ -1,0 +1,7 @@
+/* 表格 — lapis */
+.wechat-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 16px;
+  font-size: 13px;
+}

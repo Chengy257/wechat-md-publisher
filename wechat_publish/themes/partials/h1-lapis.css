@@ -1,0 +1,11 @@
+/* 一级标题 — lapis 底线型 */
+.wechat-content h1 {
+  font-size: 22px;
+  font-weight: bold;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  text-align: center;
+  color: $h1_color;
+  border-bottom: 2px solid $h1_border;
+  padding-bottom: 8px;
+}

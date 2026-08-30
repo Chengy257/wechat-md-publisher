@@ -1,0 +1,114 @@
+/* base.css — 主题引擎结构骨架。
+ *
+ * 只承载 8 个内置主题逐字一致（色值经 token 注入）且选择器与 partials
+ * 无交集的规则块；跨主题的结构差异全部在 themes/partials/ 中按形态抽取，
+ * 由 theme_engine.render_preset_css 按 THEME_PRESETS 的 partials 序列拼接。
+ * 拼接顺序即规则顺序：partials 必须保持与旧主题文件一致的相对次序，
+ * 否则 premailer 内联出的 style 属性文本会变化（黄金基线逐字节比对）。
+ *
+ * 模板引擎为 string.Template 占位符，CSS 花括号无需转义。
+ */
+
+/* 粗体 */
+.wechat-content strong {
+  font-weight: bold;
+  color: $strong_color;
+}
+
+/* 斜体 */
+.wechat-content em {
+  font-style: italic;
+  color: $em_color;
+}
+
+/* 表格斑马纹 */
+.wechat-content tr.row-alt {
+  background-color: $row_alt_bg;
+}
+
+/* 列表兼容 */
+.list-marker {
+  color: $list_marker_color;
+  font-weight: bold;
+}
+
+/* 脚注 */
+.footnote-ref {
+  color: $footnote_ref_color;
+  font-size: 0.8em;
+  font-weight: 600;
+  vertical-align: super;
+  margin: 0 2px;
+}
+
+.footnote-url {
+  color: $footnote_url_color;
+}
+
+.wechat-content .table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+/* 代码块：mac 风格标题条 + 横向滚动（滚动载体在 code 上） */
+.wechat-content .codeblock {
+  margin: $codeblock_margin;
+  border-radius: $radius;
+}
+
+.wechat-content .codeblock-bar {
+  position: relative;
+  background: $bar_bg;
+  border: 1px solid $bar_border;
+  border-bottom: none;
+  border-radius: $radius $radius 0 0;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: $bar_text;
+  font-family: $bar_font;
+}
+
+.wechat-content .codeblock-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.wechat-content .dot-red {
+  background-color: #ff5f56;
+}
+
+.wechat-content .dot-yellow {
+  background-color: #ffbd2e;
+}
+
+.wechat-content .dot-green {
+  background-color: #27c93f;
+}
+
+.wechat-content .codeblock-lang {
+  position: absolute;
+  right: 88px;
+  top: 8px;
+  font-size: 12px;
+  color: $bar_text;
+}
+
+.wechat-content .copy-btn {
+  position: absolute;
+  right: 12px;
+  top: 5px;
+  padding: 1px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  border: 1px solid $copy_btn_border;
+  border-radius: 6px;
+  background: $copy_btn_bg;
+  color: $copy_btn_color;
+}

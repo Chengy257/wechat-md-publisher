@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from wechat_publish.config import load_theme_css, resolve_style_path
+from wechat_publish.config import load_preset_css
 from wechat_publish.html_processor import process_article_html
 from wechat_publish.render import (
     parse_front_matter,
@@ -208,10 +208,8 @@ _SMOKED_THEMES = ("fancy", "nb", "filling")
 
 
 def _bundled_theme_css(theme: str) -> str:
-    path = resolve_style_path(style_arg=None, theme_arg=theme, project_dir=Path("/tmp"))
-    assert path.name == f"{theme}.css"
-    css = load_theme_css(path)
-    assert css, f"bundled {theme}.css must not be empty"
+    css = load_preset_css(theme)
+    assert css, f"theme preset '{theme}' must render non-empty CSS"
     return css
 
 

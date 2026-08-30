@@ -1,0 +1,7 @@
+/* 列表容器 — 经典型（default elegant simple tech fancy nb filling） */
+.wechat-content ul,
+.wechat-content ol {
+  margin: 0.8em 0;
+  padding-left: 1.5em;
+  color: $text;
+}

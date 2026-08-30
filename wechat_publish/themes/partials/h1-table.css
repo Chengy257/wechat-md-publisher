@@ -1,0 +1,11 @@
+/* 一级标题 — 居中表格型（default elegant tech fancy nb filling） */
+.wechat-content h1 {
+  display: table;
+  padding: 0 1em;
+  border-bottom: 2px solid $h1_border;
+  margin: $h1_margin;
+  font-size: 22px;
+  font-weight: bold;
+  text-align: center;
+  color: $h1_color;
+}

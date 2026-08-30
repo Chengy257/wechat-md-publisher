@@ -1,0 +1,7 @@
+/* 代码块内 pre — 底部圆角（全部主题） */
+.wechat-content .codeblock pre {
+  margin: 0;
+  border-radius: 0 0 $radius $radius;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}

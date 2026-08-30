@@ -1,0 +1,8 @@
+/* 图片 — 带边框型（simple tech） */
+.wechat-content img {
+  display: block;
+  max-width: 100%;
+  margin: 1em auto;
+  border-radius: $img_radius;
+  border: 1px solid $img_border;
+}

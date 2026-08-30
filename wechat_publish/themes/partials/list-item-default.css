@@ -1,0 +1,6 @@
+/* 列表兼容项 — 经典型（default elegant simple tech fancy nb filling） */
+.list-item {
+  margin: 0 0 8px;
+  line-height: 1.75;
+  text-align: justify;
+}

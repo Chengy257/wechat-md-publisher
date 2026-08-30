@@ -1,0 +1,5 @@
+/* 脚注区列表项（全部主题） */
+.footnotes li {
+  margin-bottom: $footnotes_li_margin;
+  color: $footnotes_li_color;
+}

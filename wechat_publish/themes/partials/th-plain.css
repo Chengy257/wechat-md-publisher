@@ -1,0 +1,5 @@
+/* 表头 — 无文字色（default fancy nb） */
+.wechat-content th {
+  font-weight: bold;
+  background: $th_bg;
+}

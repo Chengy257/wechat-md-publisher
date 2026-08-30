@@ -1,0 +1,6 @@
+/* 分隔线 — lapis border-top 型 */
+.wechat-content hr {
+  border: none;
+  border-top: 1px solid $hr_color;
+  margin: 24px 0;
+}

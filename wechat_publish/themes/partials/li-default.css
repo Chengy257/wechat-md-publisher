@@ -1,0 +1,5 @@
+/* 列表项 — 经典型（default elegant simple tech fancy nb filling） */
+.wechat-content li {
+  margin: $li_margin;
+  color: $text;
+}

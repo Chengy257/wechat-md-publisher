@@ -1,0 +1,7 @@
+/* 图片 — 经典型（default elegant fancy nb filling） */
+.wechat-content img {
+  display: block;
+  max-width: 100%;
+  margin: 1em auto;
+  border-radius: $img_radius;
+}

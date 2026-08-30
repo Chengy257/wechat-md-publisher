@@ -1,0 +1,10 @@
+/* 根容器 — tech（深色底 + 内边距） */
+.wechat-content {
+  font-family: $root_font;
+  font-size: 16px;
+  line-height: 1.75;
+  color: $text;
+  background-color: $root_bg;
+  padding: $root_padding;
+  overflow-wrap: break-word;
+}
