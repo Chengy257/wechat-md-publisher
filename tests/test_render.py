@@ -133,9 +133,19 @@ class TestRenderArticle:
         # Body structure matches the WeChat output (mac-style bar + dots).
         assert 'class="codeblock-bar"' in result.preview_html
         assert 'class="codeblock-dot dot-red"' in result.preview_html
-        # Preview shell styles the dots and wires the copy button.
+        assert '<span class="copy-btn">复制代码</span>' in result.preview_html
+        # Preview shell styles the dots, positions the copy button like the
+        # themes do (right: 12px), and moves the lang label out of the way.
         assert ".codeblock-bar .codeblock-dot" in result.preview_html
-        assert "copy-btn" in result.preview_html
+        assert ".copy-btn { position: absolute; right: 12px; top: 5px;" in result.preview_html
+        assert ".codeblock-bar .codeblock-lang { position: absolute; right: 88px;" in result.preview_html
+        # The copy script binds the existing span instead of skipping it.
+        assert "bar.querySelector('.copy-btn')" in result.preview_html
+        assert "'已复制'" in result.preview_html
+        assert "'复制失败'" in result.preview_html
+        assert "'复制代码'" in result.preview_html
+        # The WeChat output itself stays JavaScript-free.
+        assert "<script" not in result.wechat_html
 
     def test_more_marker_removed(self, tmp_path: Path):
         md_file = tmp_path / "article.md"

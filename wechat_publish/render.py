@@ -167,13 +167,15 @@ def _wrap_preview(body_html: str, title: str = "") -> str:
         # preview even when no theme CSS was inlined; with a theme the
         # inlined styles match these declarations.
         ".codeblock-bar .codeblock-dot { display: inline-block; width: 12px; "
-        "height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }\n"
+        "height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; "
+        "font-size: 12px; line-height: 1; }\n"
         ".codeblock-bar .dot-red { background-color: #ff5f56; }\n"
         ".codeblock-bar .dot-yellow { background-color: #ffbd2e; }\n"
         ".codeblock-bar .dot-green { background-color: #27c93f; }\n"
-        # The .codeblock-lang label carries an inlined position (right: 12px)
-        # inside the article body, so the copy button must clear it.
-        ".copy-btn { position: absolute; right: 64px; top: 50%; transform: translateY(-50%); "
+        # The .codeblock-lang label carries an inlined position (right: 88px)
+        # inside the article body; the copy button sits at right: 12px.
+        ".codeblock-bar .codeblock-lang { position: absolute; right: 88px; top: 8px; }\n"
+        ".copy-btn { position: absolute; right: 12px; top: 5px; "
         "padding: 1px 10px; font-size: 12px; line-height: 1.6; border: 1px solid #d0d7de; "
         "border-radius: 6px; background: #fff; color: #57606a; cursor: pointer; font-family: inherit; }\n"
         ".copy-btn.copied { color: #1a7f37; border-color: #1a7f37; }\n"
@@ -191,39 +193,39 @@ def _wrap_preview(body_html: str, title: str = "") -> str:
 
 
 # Local preview only: the WeChat article body stays JavaScript-free, but the
-# browser preview can wire a clipboard button onto each code block's bar.
+# browser preview can wire a clipboard handler onto each code block's bar.
+# The article body already carries a static span.copy-btn (WeChat shows it as
+# a styled label), so prefer binding that; only fall back to creating a
+# button when the bar has none (e.g. bare HTML pasted into the preview).
 _PREVIEW_COPY_SCRIPT = (
     "<script>\n"
     "(function () {\n"
-    "  document.querySelectorAll('pre > code').forEach(function (code) {\n"
-    "    var pre = code.parentElement;\n"
-    "    if (!pre) { return; }\n"
-    "    var container = pre.parentElement;\n"
-    "    var bar = container.querySelector(':scope > .codeblock-bar');\n"
-    "    if (!bar) {\n"
-    "      bar = document.createElement('section');\n"
-    "      bar.className = 'codeblock-bar';\n"
-    "      container.insertBefore(bar, pre);\n"
+    "  document.querySelectorAll('.codeblock-bar').forEach(function (bar) {\n"
+    "    var container = bar.parentElement;\n"
+    "    var pre = container ? container.querySelector(':scope > pre') : null;\n"
+    "    var code = pre ? pre.querySelector('code') : null;\n"
+    "    var btn = bar.querySelector('.copy-btn');\n"
+    "    if (!btn) {\n"
+    "      btn = document.createElement('button');\n"
+    "      btn.type = 'button';\n"
+    "      btn.className = 'copy-btn';\n"
+    "      btn.textContent = '复制代码';\n"
+    "      bar.appendChild(btn);\n"
     "    }\n"
-    "    if (bar.querySelector('.copy-btn')) { return; }\n"
-    "    var btn = document.createElement('button');\n"
-    "    btn.type = 'button';\n"
-    "    btn.className = 'copy-btn';\n"
-    "    btn.textContent = '复制';\n"
+    "    if (!code) { return; }\n"
     "    btn.addEventListener('click', function () {\n"
     "      navigator.clipboard.writeText(code.innerText).then(function () {\n"
     "        btn.textContent = '已复制';\n"
     "        btn.classList.add('copied');\n"
     "        setTimeout(function () {\n"
-    "          btn.textContent = '复制';\n"
+    "          btn.textContent = '复制代码';\n"
     "          btn.classList.remove('copied');\n"
     "        }, 1500);\n"
     "      }).catch(function () {\n"
     "        btn.textContent = '复制失败';\n"
-    "        setTimeout(function () { btn.textContent = '复制'; }, 1500);\n"
+    "        setTimeout(function () { btn.textContent = '复制代码'; }, 1500);\n"
     "      });\n"
     "    });\n"
-    "    bar.appendChild(btn);\n"
     "  });\n"
     "})();\n"
     "</script>"

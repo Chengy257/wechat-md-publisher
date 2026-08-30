@@ -1,5 +1,6 @@
 """HTML processor tests: sanitization, CSS inlining, list flattening, footnotes, image discovery."""
 
+import re
 from pathlib import Path
 
 import wechat_publish.html_processor as html_processor_module
@@ -354,12 +355,20 @@ class TestCodeBlockDecoration:
         pre_pos = result.find("<pre>")
         assert 0 < bar_pos < pre_pos
 
-    def test_bar_contains_three_dots(self):
+    def test_bar_contains_three_non_empty_dots(self):
         html = '<pre><code class="language-python">x = 1</code></pre>'
         result = make_wechat_compatible(html)
-        assert '<span class="codeblock-dot dot-red"></span>' in result
-        assert '<span class="codeblock-dot dot-yellow"></span>' in result
-        assert '<span class="codeblock-dot dot-green"></span>' in result
+        # WeChat clears empty nodes: each dot carries a non-breaking space.
+        assert '<span class="codeblock-dot dot-red">\u00a0</span>' in result
+        assert '<span class="codeblock-dot dot-yellow">\u00a0</span>' in result
+        assert '<span class="codeblock-dot dot-green">\u00a0</span>' in result
+
+    def test_bar_ends_with_copy_button(self):
+        html = '<pre><code class="language-python">x = 1</code></pre>'
+        result = make_wechat_compatible(html)
+        assert '<span class="copy-btn">复制代码</span>' in result
+        # The copy button comes after the lang label (or the dots) in the bar.
+        assert result.find("copy-btn") < result.find("<pre>")
 
     def test_unmarked_block_is_wrapped_without_lang(self):
         html = "<pre><code>plain code</code></pre>"
@@ -367,6 +376,8 @@ class TestCodeBlockDecoration:
         assert 'class="codeblock"' in result
         assert 'class="codeblock-bar"' in result
         assert "codeblock-lang" not in result
+        # The copy button is always present, even without a language label.
+        assert '<span class="copy-btn">复制代码</span>' in result
 
     def test_mermaid_block_not_decorated(self):
         html = '<pre><code class="language-mermaid">graph TD\nA-->B</code></pre>'
@@ -380,6 +391,7 @@ class TestCodeBlockDecoration:
         twice = make_wechat_compatible(once)
         assert twice.count('class="codeblock"') == 1
         assert twice.count('class="codeblock-bar"') == 1
+        assert twice.count('class="copy-btn"') == 1
 
     def test_unmarked_decoration_idempotent(self):
         html = "<pre><code>plain code</code></pre>"
@@ -387,6 +399,7 @@ class TestCodeBlockDecoration:
         twice = make_wechat_compatible(once)
         assert twice.count('class="codeblock"') == 1
         assert twice.count("codeblock-dot") == 3
+        assert twice.count('class="copy-btn"') == 1
 
 
 # ── CSS inlining of the code block scroll carrier ──────────────
@@ -402,7 +415,8 @@ _CODEBLOCK_CSS = """
 .wechat-content .dot-red { background-color: #ff5f56; }
 .wechat-content .dot-yellow { background-color: #ffbd2e; }
 .wechat-content .dot-green { background-color: #27c93f; }
-.wechat-content .codeblock-lang { position: absolute; right: 12px; top: 8px; font-size: 12px; }
+.wechat-content .codeblock-lang { position: absolute; right: 88px; top: 8px; font-size: 12px; }
+.wechat-content .copy-btn { position: absolute; right: 12px; top: 5px; padding: 1px 10px; font-size: 12px; line-height: 1.6; border: 1px solid #d0d7de; border-radius: 6px; background: #fff; color: #57606a; }
 .wechat-content .codeblock pre { margin: 0; border-radius: 0 0 8px 8px; }
 .wechat-content .codeblock pre code {
   display: block;
@@ -481,3 +495,11 @@ class TestCodeBlockScrollInlining:
         scroll_start = result.find('class="table-scroll"')
         scroll_seg = result[scroll_start: result.find("<table", scroll_start)]
         assert "-webkit-overflow-scrolling:touch" in scroll_seg
+        # The copy button is a statically positioned span in the WeChat body.
+        copy_start = result.find('class="copy-btn"')
+        assert copy_start != -1
+        tag_start = result.rfind("<span", 0, copy_start)
+        tag_end = result.find(">", copy_start)
+        btn_style = re.search(r'style="([^"]*)"', result[tag_start:tag_end])
+        assert btn_style is not None
+        assert "position:absolute" in btn_style.group(1)

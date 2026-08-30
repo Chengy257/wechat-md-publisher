@@ -155,9 +155,13 @@ def _decorate_code_blocks(soup: BeautifulSoup) -> None:
     Each ``pre`` that contains a ``code`` child and is not already inside a
     ``.codeblock`` wrapper (idempotency) is wrapped into
     ``section.codeblock`` with a ``section.codeblock-bar`` placed before the
-    pre. The bar carries three decorative dots (real empty ``span`` elements
-    — WeChat has no pseudo-elements) plus a ``span.codeblock-lang`` label
-    only when the code declares a non-mermaid ``language-X`` class.
+    pre. The bar carries three decorative dots (real ``span`` elements padded
+    with a non-breaking space — WeChat has no pseudo-elements and clears
+    empty nodes) plus a ``span.codeblock-lang`` label only when the code
+    declares a non-mermaid ``language-X`` class, and always ends with a
+    ``span.copy-btn`` ("复制代码"): a static styled span in the WeChat body
+    (no JS possible there), which the local preview wires up as a real
+    copy button.
     Mermaid blocks are left untouched so the mermaid renderer can re-read
     their newlines verbatim.
     """
@@ -182,11 +186,18 @@ def _decorate_code_blocks(soup: BeautifulSoup) -> None:
         wrapper = soup.new_tag("section", attrs={"class": "codeblock"})
         bar = soup.new_tag("section", attrs={"class": "codeblock-bar"})
         for dot_class in ("dot-red", "dot-yellow", "dot-green"):
-            bar.append(soup.new_tag("span", attrs={"class": f"codeblock-dot {dot_class}"}))
+            dot = soup.new_tag("span", attrs={"class": f"codeblock-dot {dot_class}"})
+            # WeChat's editor clears empty nodes: pad each dot with a
+            # non-breaking space so the span survives the round trip.
+            dot.append(NavigableString("\u00a0"))
+            bar.append(dot)
         if lang:
             label = soup.new_tag("span", attrs={"class": "codeblock-lang"})
             label.string = lang
             bar.append(label)
+        copy_btn = soup.new_tag("span", attrs={"class": "copy-btn"})
+        copy_btn.string = "复制代码"
+        bar.append(copy_btn)
         pre.replace_with(wrapper)
         wrapper.append(bar)
         wrapper.append(pre)

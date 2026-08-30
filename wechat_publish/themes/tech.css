@@ -269,6 +269,8 @@
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: middle;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .wechat-content .dot-red {
@@ -285,9 +287,22 @@
 
 .wechat-content .codeblock-lang {
   position: absolute;
-  right: 12px;
+  right: 88px;
   top: 8px;
   font-size: 12px;
+  color: #8b949e;
+}
+
+.wechat-content .copy-btn {
+  position: absolute;
+  right: 12px;
+  top: 5px;
+  padding: 1px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  border: 1px solid #444c56;
+  border-radius: 6px;
+  background: #2d333b;
   color: #8b949e;
 }
 
