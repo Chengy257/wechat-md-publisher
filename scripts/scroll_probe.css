@@ -235,15 +235,18 @@
 
 .wechat-content .table-scroll {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .wechat-content th {
   white-space: nowrap;
 }
 
-/* 代码块语言条 */
+/* 代码块：mac 风格标题条 + 横向滚动（滚动载体在 code 上） */
 .wechat-content .codeblock {
-  margin: 1em 0;
+  margin: 1.2em 0;
+  border-radius: 8px;
 }
 
 .wechat-content .codeblock-bar {
@@ -258,11 +261,50 @@
   font-family: Menlo, Consolas, Monaco, monospace;
 }
 
+.wechat-content .codeblock-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.wechat-content .dot-red {
+  background-color: #ff5f56;
+}
+
+.wechat-content .dot-yellow {
+  background-color: #ffbd2e;
+}
+
+.wechat-content .dot-green {
+  background-color: #27c93f;
+}
+
+.wechat-content .codeblock-lang {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  font-size: 12px;
+  color: #57606a;
+}
+
 .wechat-content .codeblock pre {
   margin: 0;
   border-radius: 0 0 8px 8px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
+}
+
+.wechat-content .codeblock pre code {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: pre;
+  background: transparent;
+  padding: 0;
+  line-height: 1.6;
 }
 
 /* ==== 滚动排版探针变体覆盖块（追加在文件末尾，同等特异性下靠后者覆盖默认主题） ==== */
@@ -294,7 +336,8 @@
 
 .wechat-content .probe-c1 pre code {
   display: inline;
-  overflow: visible;
+  overflow-x: visible;
+  overflow-y: visible;
   white-space: normal;
 }
 
