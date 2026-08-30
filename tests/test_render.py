@@ -286,3 +286,32 @@ class TestNewThemeSmoke:
         btn_style = re.search(r'style="([^"]*)"', html[tag_start:tag_end])
         assert btn_style is not None
         assert "position:absolute" in btn_style.group(1)
+
+
+# ── New layout smoke (serif / terminal / card / classic) ─────────
+
+
+class TestNewLayoutSmoke:
+    """The four non-default layouts must survive the full inline pipeline."""
+
+    @pytest.mark.parametrize("layout", ["card", "classic", "serif", "terminal"])
+    def test_layout_inlines_identity_on_root(self, layout):
+        css = theme_engine.render_css(layout, "default")
+        md = (
+            "# Heading 1\n\n## Heading 2\n\n> a quote\n\n- item\n\n"
+            "```python\nprint('hi')\n```\n"
+        )
+        raw = render_markdown_to_html(md)
+        html = process_article_html(raw, css)
+        assert "style=" in html, layout
+        root_start = html.find('class="wechat-content"')
+        assert root_start != -1, layout
+        root_tag = html[html.rfind("<section", 0, root_start):html.find(">", root_start)]
+        expected_font = {
+            "card": None,  # card keeps a neutral sans stack; no identity font
+            "classic": "Kaiti",
+            "serif": "Georgia",
+            "terminal": None,
+        }[layout]
+        if expected_font:
+            assert expected_font.lower() in root_tag.lower(), layout

@@ -86,6 +86,49 @@ def process_article_html(html: str, theme_css: str = "") -> str:
     return html
 
 
+# Text ornaments injected for the classic layout. Real text characters only
+# (WeChat has no pseudo-elements/JS); both classes are styled by
+# themes/layouts/classic.css and survive the nh3 allowlist (section/span +
+# class are whitelisted).
+_ORN_DIVIDER_TEXT = "✦ ❖ ✦"
+_ORN_END_TEXT = "❦"
+
+
+def apply_layout_ornaments(html: str, *, layout: str) -> str:
+    """Inject layout-specific text decorations into rendered article HTML.
+
+    Must run BEFORE ``process_article_html`` (i.e. before sanitize and CSS
+    inlining) so the injected sections are sanitized with the article and
+    get the layout stylesheet inlined onto them. Currently only the
+    ``classic`` layout carries ornaments:
+
+    - every ``<hr>`` becomes ``<section class="orn-divider">✦ ❖ ✦</section>``
+      (a text divider instead of a rule line);
+    - a single ``<section class="orn-end">❦</section>`` is appended at the
+      very end of the fragment.
+
+    Idempotent: a repeated call on already-decorated HTML is a no-op (no
+    ``<hr>`` left to convert, and the end marker is appended only when
+    absent). Non-ornamented layouts return the input unchanged.
+    """
+    if layout != "classic":
+        return html
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    for hr in soup.find_all("hr"):
+        divider = soup.new_tag("section", attrs={"class": "orn-divider"})
+        divider.string = _ORN_DIVIDER_TEXT
+        hr.replace_with(divider)
+
+    if soup.find("section", class_="orn-end") is None:
+        end = soup.new_tag("section", attrs={"class": "orn-end"})
+        end.string = _ORN_END_TEXT
+        soup.append(end)
+
+    return str(soup)
+
+
 def sanitize_html_fragment(html: str) -> str:
     """Remove unsafe/unsupported HTML constructs for normal article authoring.
 

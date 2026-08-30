@@ -1,0 +1,223 @@
+/* terminal 版式 — 极简终端风：全局直角去阴影、等宽大写小号标题、
+ * 仅左细线的无底色引用、从简的代码块条（dots 结构保留但视觉隐藏）。
+ * 颜色全部经 token 占位符注入色板。
+ */
+
+/* 根容器 — 克制的无衬线正文（标题单独等宽化） */
+.wechat-content {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  color: $text;
+}
+
+/* 一级标题 — 等宽栈小号大写字距（终端提示符气质） */
+.wechat-content h1 {
+  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-size: 17px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $h1_color;
+  margin: 2em 0 1em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid $h2_bottom_border;
+}
+
+/* 二级标题 — 等宽栈 + 左侧细竖条 */
+.wechat-content h2 {
+  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-size: 16px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $h1_color;
+  margin: 2em 0 1em;
+  padding-left: 10px;
+  border-left: 3px solid $h2_accent;
+  text-align: left;
+  line-height: 1.4;
+}
+
+/* 三级标题（含微信兼容的 .h3-like）— 等宽栈 */
+.wechat-content h3,
+.wechat-content .h3-like {
+  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-size: 15px;
+  font-weight: bold;
+  color: $h3_color;
+  margin: $h3_margin;
+  text-align: left;
+  line-height: 1.4;
+}
+
+/* 段落 — 左对齐（终端的参差右缘） */
+.wechat-content p {
+  margin: 1.2em 0;
+  text-align: left;
+}
+
+/* 引用 — 仅左细线，无底色 */
+.wechat-content blockquote {
+  margin: 1.5em 0;
+  padding: 0.2em 0 0.2em 1em;
+  border-left: 2px solid $blockquote_border;
+  border-radius: 0;
+  background: transparent;
+  color: $muted;
+  font-style: normal;
+}
+
+.wechat-content blockquote p {
+  margin: 0.3em 0;
+  font-size: 14px;
+  color: $muted;
+}
+
+/* 行内代码 — 直角 */
+.wechat-content code {
+  font-family: $code_font;
+  font-size: 13px;
+  color: $code_inline_color;
+  background: $code_inline_bg;
+  padding: $code_inline_padding;
+  border-radius: 0;
+}
+
+/* 代码块容器 — 直角、细边框、无阴影 */
+.wechat-content pre {
+  font-size: 13px;
+  border-radius: 0;
+  padding: 14px;
+  margin: 1em 0;
+  background: $code_bg;
+  border: 1px solid $code_border;
+}
+
+/* 代码块整体 — 全局直角覆盖 */
+.wechat-content .codeblock {
+  border-radius: 0;
+}
+
+/* 代码块条 — 从简：与代码同底色，dots 结构保留但视觉隐藏 */
+.wechat-content .codeblock-bar {
+  background: $code_bg;
+  border: 1px solid $code_border;
+  border-bottom: none;
+  border-radius: 0;
+}
+
+.wechat-content .codeblock-dot {
+  display: none;
+}
+
+.wechat-content .codeblock-lang {
+  right: 60px;
+}
+
+.wechat-content .copy-btn {
+  border-radius: 0;
+}
+
+/* 代码块内 pre/code — 直角（滚动契约在 common partial 中逐字保留） */
+.wechat-content .codeblock pre {
+  border-radius: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.wechat-content pre code {
+  border-radius: 0;
+}
+
+/* 列表 */
+.wechat-content ul,
+.wechat-content ol {
+  margin: 0.8em 0;
+  padding-left: 1.5em;
+  color: $text;
+}
+
+.wechat-content li {
+  margin: 0.4em 0;
+  color: $text;
+}
+
+.list-item {
+  margin: 0 0 6px;
+  line-height: 1.75;
+  text-align: left;
+}
+
+/* 链接 — 下边框细线 */
+.wechat-content a {
+  color: $link;
+  text-decoration: none;
+  border-bottom: 1px solid $link;
+}
+
+/* 图片 — 直角 */
+.wechat-content img {
+  display: block;
+  max-width: 100%;
+  margin: 1em auto;
+  border-radius: 0;
+}
+
+.wechat-content figcaption {
+  text-align: center;
+  color: $figcaption_color;
+  font-size: 13px;
+  margin: 0.3em 0 1em;
+}
+
+/* 分隔线 — 细线 */
+.wechat-content hr {
+  border: none;
+  height: 1px;
+  margin: 2em 0;
+  background: $hr_color;
+}
+
+/* 表格 — 等宽字体 + 细边框 */
+.wechat-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 13px;
+  font-family: Menlo, Consolas, "Courier New", monospace;
+}
+
+.wechat-content th,
+.wechat-content td {
+  border: 1px solid $table_border;
+  padding: 5px 8px;
+  text-align: left;
+}
+
+.wechat-content th {
+  font-weight: bold;
+  background: $th_bg;
+  white-space: nowrap;
+  color: $th_color;
+}
+
+/* 脚注区 */
+.footnotes {
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid $footnotes_border;
+  font-size: 13px;
+  color: $footnotes_color;
+}
+
+.footnotes ol {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.footnotes li {
+  margin-bottom: $footnotes_li_margin;
+  color: $footnotes_li_color;
+}

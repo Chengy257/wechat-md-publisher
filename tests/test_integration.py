@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -400,3 +401,80 @@ class TestLayoutPaletteCLI:
         rc = main(["inspect", "--md", "input/article.md", "--layout", "default"])
         assert rc == 0
         assert "Resolved Metadata" in capsys.readouterr().out
+
+
+class TestLayoutOrnamentsCLI:
+    """classic 版式装饰注入的 CLI 端到端（render 路径）。"""
+
+    _ARTICLE = (
+        '---\ntitle: "T"\n---\n\n# Head\n\npara one\n\n---\n\npara two\n'
+    )
+
+    def test_classic_layout_injects_and_inlines_ornaments(self, tmp_project: Path):
+        (tmp_project / "input" / "article.md").write_text(self._ARTICLE, encoding="utf-8")
+        rc = main([
+            "render", "--md", "input/article.md",
+            "--layout", "classic", "--palette", "default",
+            "--out", "build/w.html", "--preview-out", "build/p.html",
+        ])
+        assert rc == 0
+        html = (tmp_project / "build" / "w.html").read_text(encoding="utf-8")
+        # hr 被转换为文字装饰分隔符
+        assert "<hr" not in html
+        assert 'class="orn-divider"' in html
+        assert "✦ ❖ ✦" in html
+        # 文末装饰符全文唯一
+        assert html.count('class="orn-end"') == 1
+        assert "❦" in html
+        # classic.css 的装饰样式被内联生效
+        div_start = html.find('class="orn-divider"')
+        tag_start = html.rfind("<section", 0, div_start)
+        tag_end = html.find(">", div_start)
+        style = re.search(r'style="([^"]*)"', html[tag_start:tag_end])
+        assert style is not None
+        assert "letter-spacing:0.6em" in style.group(1)
+        # 楷体根字体也一并内联
+        root_start = html.find('class="wechat-content"')
+        root_tag = html[html.rfind("<section", 0, root_start):html.find(">", root_start)]
+        assert "Kaiti" in root_tag or "KaiTi" in root_tag
+
+    def test_default_layout_has_no_ornaments(self, tmp_project: Path):
+        (tmp_project / "input" / "article.md").write_text(self._ARTICLE, encoding="utf-8")
+        rc = main([
+            "render", "--md", "input/article.md",
+            "--layout", "default", "--palette", "default",
+            "--out", "build/w.html", "--preview-out", "build/p.html",
+        ])
+        assert rc == 0
+        html = (tmp_project / "build" / "w.html").read_text(encoding="utf-8")
+        assert "orn-divider" not in html
+        assert "orn-end" not in html
+
+    def test_theme_preset_path_never_injects_ornaments(self, tmp_project: Path):
+        (tmp_project / "input" / "article.md").write_text(self._ARTICLE, encoding="utf-8")
+        rc = main([
+            "render", "--md", "input/article.md",
+            "--theme", "default",
+            "--out", "build/w.html", "--preview-out", "build/p.html",
+        ])
+        assert rc == 0
+        html = (tmp_project / "build" / "w.html").read_text(encoding="utf-8")
+        assert "orn-divider" not in html
+        assert "orn-end" not in html
+
+    def test_serif_and_classic_layouts_render_end_to_end(self, tmp_project: Path):
+        (tmp_project / "input" / "article.md").write_text(self._ARTICLE, encoding="utf-8")
+        cases = [
+            ("serif", "nb", "Georgia"),
+            ("classic", "default", "KaiTi"),
+        ]
+        for layout, palette, identity in cases:
+            rc = main([
+                "render", "--md", "input/article.md",
+                "--layout", layout, "--palette", palette,
+                "--out", "build/w.html", "--preview-out", "build/p.html",
+            ])
+            assert rc == 0, layout
+            html = (tmp_project / "build" / "w.html").read_text(encoding="utf-8")
+            assert "style=" in html, layout
+            assert identity in html, layout

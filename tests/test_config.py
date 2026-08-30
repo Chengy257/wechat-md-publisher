@@ -428,16 +428,19 @@ class TestResolveSelection:
                 theme_arg=None, project_dir=None,
             )
 
-    def test_placeholder_layouts_fail_closed(self):
+    def test_all_registered_layouts_resolve(self):
         from wechat_publish.theme_engine import BUILTIN_LAYOUTS
 
-        for name in ("serif", "terminal", "card", "classic"):
-            assert name in BUILTIN_LAYOUTS
-            with pytest.raises(ValueError, match="版式文件未实现"):
-                resolve_selection(
-                    style_arg=None, layout_arg=name, palette_arg="default",
-                    theme_arg=None, project_dir=None,
-                )
+        # All five builtin layouts are implemented; each resolves through the
+        # engine path (the old placeholder "版式文件未实现" fail-closed branch
+        # is kept in render_css for any future unimplemented layout).
+        for name in BUILTIN_LAYOUTS:
+            css, palette = resolve_selection(
+                style_arg=None, layout_arg=name, palette_arg="default",
+                theme_arg=None, project_dir=None,
+            )
+            assert css.strip(), name
+            assert palette is not None and palette["_source"] == "builtin", name
 
 
 class TestProjectPalettes:

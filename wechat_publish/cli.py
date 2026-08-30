@@ -28,13 +28,12 @@ from .config import (
 )
 from .draft import DraftArticle, add_draft, build_draft_payload, validate_publish_preflight
 from .errors import RemoteDraftCreatedLocalStateFailed, WeChatAPIError
-from .html_processor import discover_images, process_article_html
+from .html_processor import apply_layout_ornaments, discover_images, process_article_html
 from .images import compress_cover, process_images, upload_cover_image
 from .render import (
     _wrap_preview,
     parse_front_matter,
     pygments_style_for_palette,
-    render_article,
     render_markdown_to_html,
 )
 from .state import (
@@ -43,7 +42,7 @@ from .state import (
     save_post_snapshot,
     write_text_atomic,
 )
-from .theme_engine import list_layouts, list_palettes, resolve_selection
+from .theme_engine import BUILTIN_LAYOUTS, list_layouts, list_palettes, resolve_selection
 from .token import get_access_token, mask_appid, mask_token
 
 _T = TypeVar("_T")
@@ -279,6 +278,27 @@ def _resolve_theme_assets(
     )
 
 
+def _ornament_layout(
+    args: argparse.Namespace, pub_cfg: Mapping[str, Any]
+) -> str | None:
+    """Return the layout whose HTML ornaments should be injected, or ``None``.
+
+    Ornaments run only on the engine path (``--layout``/``--palette`` or a
+    publish.yaml ``layout`` default): ``--style`` and ``--theme`` bypass the
+    engine and never get decorations. Whether a layout decorates at all is
+    decided by its ``ornaments`` flag in ``theme_engine.BUILTIN_LAYOUTS``.
+    """
+    if getattr(args, "style", None) is not None or getattr(args, "theme", None):
+        return None
+    layout, _ = _apply_theme_config_defaults(args, pub_cfg)
+    if not layout:
+        return None
+    entry = BUILTIN_LAYOUTS.get(layout)
+    if entry is not None and entry.get("ornaments"):
+        return layout
+    return None
+
+
 def _run_with_token_retry(
     token: Any,
     appid: str,
@@ -353,28 +373,52 @@ def _autofill_front_matter(
 # ── render command ──────────────────────────────────────────────
 
 def cmd_render(args: argparse.Namespace) -> int:
-    """Render Markdown to preview and WeChat HTML."""
+    """Render Markdown to preview and WeChat HTML.
+
+    Mirrors ``render.render_article`` step by step but keeps the
+    layout-ornaments injection (``apply_layout_ornaments``) between markdown
+    rendering and WeChat processing, which ``render_article`` (whose module
+    is outside this feature's ownership) does not support.
+    """
     md_path = args.md
     if not md_path.exists():
         print(f"[ERROR] Markdown file not found: {md_path}", file=sys.stderr)
         return 1
 
     project = _resolve_project_dir(args)
-    theme_css, palette = _resolve_theme_assets(
-        args, project, _load_theme_config_defaults(project / _DEFAULT_CONFIG)
+    pub_cfg = _load_theme_config_defaults(project / _DEFAULT_CONFIG)
+    theme_css, palette = _resolve_theme_assets(args, project, pub_cfg)
+
+    markdown_text = md_path.read_text(encoding="utf-8")
+    front_matter, body = parse_front_matter(markdown_text)
+
+    # Remove <!--more--> marker
+    body = body.replace("<!--more-->", "")
+
+    raw_html = render_markdown_to_html(
+        body, pygments_style=pygments_style_for_palette(palette)
     )
 
-    result = render_article(
-        md_path,
-        theme_css=theme_css,
-        build_dir=args.out.parent if args.out else None,
-        preview_path=args.preview_out,
-        wechat_path=args.out,
-        pygments_style=pygments_style_for_palette(palette),
-    )
+    # Layout decorations (classic divider/end markers) are injected before
+    # sanitize/compat/inlining so they survive nh3 and get the layout CSS
+    # inlined onto them.
+    ornament_layout = _ornament_layout(args, pub_cfg)
+    if ornament_layout:
+        raw_html = apply_layout_ornaments(raw_html, layout=ornament_layout)
 
-    print(f"[OK] preview: {result.preview_path}")
-    print(f"[OK] wechat:  {result.wechat_path}")
+    wechat_html = process_article_html(raw_html, theme_css)
+
+    preview_path = args.preview_out
+    wechat_path = args.out
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    wechat_path.parent.mkdir(parents=True, exist_ok=True)
+
+    title = str(front_matter.get("title", ""))
+    preview_path.write_text(_wrap_preview(wechat_html, title), encoding="utf-8")
+    wechat_path.write_text(wechat_html, encoding="utf-8")
+
+    print(f"[OK] preview: {preview_path}")
+    print(f"[OK] wechat:  {wechat_path}")
     return 0
 
 
@@ -488,6 +532,13 @@ def _render_stage(args: argparse.Namespace, write_outputs: bool = True) -> _Draf
     raw_html = render_markdown_to_html(
         body, pygments_style=pygments_style_for_palette(palette)
     )
+
+    # Layout decorations (classic divider/end markers) before sanitize and
+    # inlining — same ordering as the render command.
+    ornament_layout = _ornament_layout(args, pub_cfg)
+    if ornament_layout:
+        raw_html = apply_layout_ornaments(raw_html, layout=ornament_layout)
+
     build_dir = config.build_dir
     preview_path = build_dir / "article.preview.html"
     wechat_path = build_dir / "article.wechat.html"

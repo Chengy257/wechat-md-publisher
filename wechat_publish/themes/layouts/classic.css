@@ -1,0 +1,203 @@
+/* classic 版式 — 古风文艺风：楷体行文、居中宽字距的标题、大缩进留白式引用、
+ * 细线表格；分隔线与文末装饰（.orn-divider/.orn-end）配合 ornaments 钩子注入。
+ * 颜色全部经 token 占位符注入色板。
+ */
+
+/* 根容器 — 楷体栈（微信端缺字体时回退 serif/默认，可接受） */
+.wechat-content {
+  font-family: "Kaiti SC", KaiTi, STKaiti, "Songti SC", SimSun, serif;
+  font-size: 17px;
+  line-height: 1.9;
+  color: $text;
+  letter-spacing: 0.05em;
+}
+
+/* 一级标题 — 居中、宽字距 */
+.wechat-content h1 {
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 0.25em;
+  color: $h1_color;
+  margin: 2em 0 1.2em;
+}
+
+/* 二级标题 — 居中、宽字距 */
+.wechat-content h2 {
+  text-align: center;
+  font-size: 19px;
+  font-weight: bold;
+  letter-spacing: 0.2em;
+  color: $h1_color;
+  margin: 2em 0 1.2em;
+}
+
+/* 三级标题（含微信兼容的 .h3-like）— 左对齐窄字距 */
+.wechat-content h3,
+.wechat-content .h3-like {
+  font-size: 17px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  color: $h3_color;
+  margin: $h3_margin;
+  text-align: left;
+  line-height: 1.5;
+}
+
+/* 段落 */
+.wechat-content p {
+  margin: 1.4em 0;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+/* 引用 — 竖排感留白：左侧大缩进、无边框无底色 */
+.wechat-content blockquote {
+  margin: 1.5em 1.5em 1.5em 2.5em;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: $muted;
+  font-style: normal;
+}
+
+.wechat-content blockquote p {
+  margin: 0.3em 0;
+  font-size: 16px;
+  color: $muted;
+}
+
+/* 行内代码 */
+.wechat-content code {
+  font-family: $code_font;
+  font-size: 14px;
+  color: $code_inline_color;
+  background: $code_inline_bg;
+  padding: $code_inline_padding;
+  border-radius: 2px;
+}
+
+/* 代码块容器 */
+.wechat-content pre {
+  font-size: 14px;
+  border-radius: 2px;
+  padding: 16px;
+  margin: 1.2em 0;
+  background: $code_bg;
+  border: 1px solid $code_border;
+}
+
+.wechat-content pre code {
+  border-radius: 0;
+}
+
+/* 列表 */
+.wechat-content ul,
+.wechat-content ol {
+  margin: 1em 0;
+  padding-left: 1.6em;
+  color: $text;
+}
+
+.wechat-content li {
+  margin: 0.5em 0;
+  color: $text;
+}
+
+.list-item {
+  margin: 0 0 10px;
+  line-height: 1.9;
+  text-align: justify;
+}
+
+/* 链接 — 细下边框 */
+.wechat-content a {
+  color: $link;
+  text-decoration: none;
+  border-bottom: 1px solid $link;
+}
+
+/* 图片 */
+.wechat-content img {
+  display: block;
+  max-width: 100%;
+  margin: 1.2em auto;
+  border-radius: 0;
+}
+
+.wechat-content figcaption {
+  text-align: center;
+  color: $figcaption_color;
+  font-size: 14px;
+  margin: 0.3em 0 1.2em;
+  letter-spacing: 0.1em;
+}
+
+/* 分隔线 — 装饰钩子未介入时的素净回退：居中细线 */
+.wechat-content hr {
+  border: none;
+  height: 1px;
+  width: 60%;
+  margin: 2em auto;
+  background: $hr_color;
+}
+
+/* 装饰分隔符（ornaments 钩子注入的真实文本） */
+.wechat-content .orn-divider {
+  text-align: center;
+  letter-spacing: 0.6em;
+  font-size: 12px;
+  color: $muted;
+  margin: 2em 0;
+}
+
+/* 文末装饰符 */
+.wechat-content .orn-end {
+  text-align: center;
+  letter-spacing: 0.2em;
+  font-size: 14px;
+  color: $muted;
+  margin: 2.5em 0 0.5em;
+}
+
+/* 表格 — 细线 */
+.wechat-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.2em 0;
+  font-size: 14px;
+}
+
+.wechat-content th,
+.wechat-content td {
+  border: 1px solid $table_border;
+  padding: 5px 10px;
+  text-align: left;
+}
+
+.wechat-content th {
+  font-weight: bold;
+  background: $th_bg;
+  white-space: nowrap;
+  color: $th_color;
+}
+
+/* 脚注区 */
+.footnotes {
+  margin-top: 2.5em;
+  padding-top: 1em;
+  border-top: 1px solid $footnotes_border;
+  font-size: 14px;
+  color: $footnotes_color;
+}
+
+.footnotes ol {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.footnotes li {
+  margin-bottom: $footnotes_li_margin;
+  color: $footnotes_li_color;
+}

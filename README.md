@@ -27,10 +27,76 @@
 
 主题 = **版式**（结构形态：标题、引用、代码块等的排布）× **色板**（颜色令牌集合）。两者解耦后可自由组合：
 
-- `--layout`：版式名。当前内置注册了 `default / serif / terminal / card / classic` 五个版式名；`default` 为经典版式，其余版式的 CSS 文件尚未落地——选择它们会得到明确的"版式文件未实现"报错，不会静默退化
+- `--layout`：版式名。内置 5 个版式全部可用，与任一 `--palette` 自由搭配（5 × 8 = 40 种组合）：
+
+| 版式 | 风格 |
+| --- | --- |
+| `default` | 经典骨架版式：仅结构公共件（代码块滚动/复制条、表格滚动等），无独立排版形态 |
+| `serif` | 期刊衬线风：全文 Georgia/宋体衬线栈，居中加大的一级标题，1.9 倍行距、拉大段距，引用去底色改双侧留白细线 |
+| `terminal` | 极简终端风：全局直角去阴影，等宽大写小号标题，仅左细线的无底色引用，代码块条从简（圆点结构保留、视觉隐藏） |
+| `card` | 圆角卡片风：代码块/引用/表格卡片化（大圆角、软阴影、内边距加大），h2 带底色章节条；正文克制不铺底色 |
+| `classic` | 古风文艺风：楷体栈、居中宽字距标题、大缩进留白式引用、细线表格；分隔线与文末装饰（`✦ ❖ ✦` / `❦`）由 ornaments 钩子注入真实文本 |
+
 - `--palette`：色板名。内置 8 个色板（与主题同名），也可在项目下放置 `config/palettes/<name>.json` 自定义色板（与内置同名的项目色板优先生效；缺必需键或 `code_scheme` 非法时会 fail-closed 报错）。`--palette` 的候选项会随项目色板目录动态出现在帮助与校验中
 - 代码高亮：由命中色板的 `code_scheme` 自动决定（`friendly` / `github-dark`），深色代码块底色的色板会自动搭配 `github-dark`
+- classic 的装饰注入在 sanitize 之前完成（装饰符为真实文本字符，`section` + `class` 均在白名单内），幂等可重复调用；`--theme` 预设与 `--style` 文件路径不做装饰注入
 - 三个子命令（`render / draft / inspect`）均支持这两个参数，语义一致；`config/publish.yaml` 可选配置 `layout` / `palette` 键作为默认值（存在即生效，CLI 显式参数优先；缺省行为不变）
+
+**自定义色板完整示例**（放在项目根 `config/palettes/my.json`，之后 `--palette my` 即生效；`PALETTE_REQUIRED_KEYS` 全部必填，另附引擎骨架与版式实际引用的扩展 token——缺了会在渲染期 fail-closed 报错）：
+
+```json
+{
+  "text": "#3e3e3e",
+  "muted": "#666666",
+  "link": "#576b95",
+  "h1_color": "#3e3e3e",
+  "h2_color": "#ffffff",
+  "h2_accent": "#07c160",
+  "h3_color": "#3e3e3e",
+  "blockquote_border": "#07c160",
+  "blockquote_bg": "#f7f7f7",
+  "code_inline_bg": "rgba(27, 31, 35, 0.05)",
+  "code_inline_color": "#d14",
+  "code_bg": "#f6f8fa",
+  "code_border": "rgba(0, 0, 0, 0.08)",
+  "bar_bg": "#eef1f4",
+  "bar_border": "rgba(0, 0, 0, 0.08)",
+  "bar_text": "#57606a",
+  "copy_btn_border": "#d0d7de",
+  "copy_btn_bg": "#ffffff",
+  "copy_btn_color": "#57606a",
+  "table_border": "#dfdfdf",
+  "th_bg": "rgba(0, 0, 0, 0.04)",
+  "row_alt_bg": "#f8f8f8",
+  "hr_color": "rgba(0, 0, 0, 0.1)",
+  "radius": "8px",
+  "code_scheme": "friendly",
+  "strong_color": "#07c160",
+  "em_color": "#3e3e3e",
+  "list_marker_color": "#07c160",
+  "footnote_ref_color": "#07c160",
+  "footnote_url_color": "#576b95",
+  "blockquote_color": "#3e3e3e",
+  "codeblock_margin": "1.2em 0",
+  "bar_font": "Menlo, Consolas, Monaco, monospace",
+  "code_font": "Menlo, Operator Mono, Consolas, Monaco, monospace",
+  "code_inline_padding": "3px 5px",
+  "pre_code_color": "#3e3e3e",
+  "figcaption_color": "#888888",
+  "h2_bg": "#07c160",
+  "h2_bottom_border": "#07c160",
+  "h2_radius": "4px",
+  "h3_border": "#07c160",
+  "h3_margin": "1.8em 0 0.75em",
+  "img_radius": "4px",
+  "footnotes_border": "rgba(0, 0, 0, 0.1)",
+  "footnotes_color": "#888888",
+  "footnotes_li_color": "#888888",
+  "footnotes_li_margin": "6px",
+  "th_color": "#3e3e3e"
+}
+```
+
 - 样式解析优先级：`--style` 文件 > `--layout` + `--palette` > `--theme` 预设 > 项目 `config/style.css` > 内置 `default` 兜底
 - **表格与代码块排版**：表格单元格统一左对齐（忽略 markdown 对齐语法产生的内联 text-align）；表格自动包进横向滚动容器（`section.table-scroll`），宽表格在手机上可横向滚动查看全部列；带语言标注的代码块顶部显示语言条（`codeblock-bar`），长代码行可横向滚动；本地 preview 的每个代码块带"复制"按钮（微信正文保持零 JavaScript，复制按钮仅存在于 `build/*.preview.html`）
 - **图片处理**：正文图自动上传（`media/uploadimg`，仅支持 JPG/PNG 且 ≤1MB）并替换 src；封面走永久素材（`material/add_material`，支持 JPG/JPEG/PNG/BMP/GIF 且 ≤10MB）；按接口拆分白名单并校验真实字节格式（魔数嗅探 + Pillow 可用时解码校验，伪图片/后缀与内容不符一律拒绝）；sha256 缓存避免重复上传；`--compress-cover` 可选 Pillow 压缩（AI 生成的封面始终自动压缩）
@@ -81,6 +147,7 @@ wechat-publish render --md input/article.md --theme default
 
 # 配色 × 版式自由组合（版式管结构，色板管颜色与代码高亮）
 wechat-publish render --md input/article.md --layout default --palette nb
+wechat-publish render --md input/article.md --layout classic --palette default
 
 # 在项目根之外运行时显式指定项目根
 wechat-publish render --md ~/blog/article.md --project-dir ~/blog

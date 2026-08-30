@@ -27,9 +27,11 @@ Extension points:
   a builtin palette of the same name (fail-closed validation identical to the
   builtin ones).
 - layouts (``--layout``): structural variants orthogonal to the palette,
-  registered in ``BUILTIN_LAYOUTS``. Only ``default`` is implemented in this
-  unit; the other names are placeholders that fail closed with an explicit
-  "版式文件未实现" error until their partials land.
+  registered in ``BUILTIN_LAYOUTS``. All five builtin layouts are
+  implemented; each non-default layout renders ``themes/layouts/<name>.css``
+  after base + the layout-common partials (later rules may override earlier
+  property values). ``ornaments`` marks layouts whose HTML decorations are
+  injected by ``html_processor.apply_layout_ornaments`` before sanitizing.
 """
 
 from __future__ import annotations
@@ -43,9 +45,8 @@ _PACKAGE_DIR = Path(__file__).resolve().parent
 _THEMES_DIR = _PACKAGE_DIR / "themes"
 _PARTIALS_DIR = _THEMES_DIR / "partials"
 _PALETTES_DIR = _PACKAGE_DIR / "palettes"
-#: Layout-specific partials live here (created by the layout unit; the
-#: directory may not exist yet — every non-default layout fails closed
-#: before any file under it is read).
+#: Layout-specific partials live here (one stylesheet per non-default
+#: layout).
 _LAYOUTS_DIR = _THEMES_DIR / "layouts"
 
 #: Keys every palette must define (fail-closed: ``load_palette`` raises
@@ -91,17 +92,31 @@ VALID_CODE_SCHEMES = ("friendly", "github-dark")
 _LAYOUT_COMMON_PARTIALS = ("codeblock-pre", "codeblock-pre-code")
 
 #: Layout registry: layout name -> metadata. ``partials`` is the
-#: layout-specific partial sequence (read from ``themes/layouts``; WIP for
-#: every non-default layout, hence the empty lists). ``implemented=False``
-#: marks a placeholder that fails closed with a "版式文件未实现" error until
-#: its partials land. Layouts are orthogonal to palettes: any layout pairs
-#: with any palette via :func:`render_css`.
+#: layout-specific partial sequence (read from ``themes/layouts``; each
+#: non-default layout ships exactly its own stylesheet — the 59 preset
+#: partials under ``themes/partials`` are byte-equality extractions of the
+#: retired theme files and are deliberately NOT reused by new layouts).
+#: ``implemented=True`` marks a fully rendered layout; an absent/False key
+#: would fail closed with a "版式文件未实现" error. Layouts are orthogonal
+#: to palettes: any layout pairs with any palette via :func:`render_css`.
 BUILTIN_LAYOUTS: dict[str, dict[str, object]] = {
     "default": {"partials": (), "ornaments": False},
-    "serif": {"partials": (), "ornaments": True, "implemented": False},
-    "terminal": {"partials": (), "ornaments": True, "implemented": False},
-    "card": {"partials": (), "ornaments": True, "implemented": False},
-    "classic": {"partials": (), "ornaments": True, "implemented": False},
+    "serif": {
+        "partials": ("serif",),
+        "ornaments": False,
+        "implemented": True,
+    },
+    "terminal": {
+        "partials": ("terminal",),
+        "ornaments": False,
+        "implemented": True,
+    },
+    "card": {"partials": ("card",), "ornaments": False, "implemented": True},
+    "classic": {
+        "partials": ("classic",),
+        "ornaments": True,
+        "implemented": True,
+    },
 }
 
 
@@ -212,7 +227,7 @@ def render_css(
     layout has an empty layout-specific sequence, so it renders as
     base + common partials.
 
-    Fail-closed: unknown layout or palette names, placeholder layouts
+    Fail-closed: unknown layout or palette names, unimplemented layouts
     ("版式文件未实现"), and missing partial files all raise ``ValueError``.
     """
     entry = BUILTIN_LAYOUTS.get(layout)

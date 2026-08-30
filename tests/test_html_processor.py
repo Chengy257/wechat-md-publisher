@@ -5,6 +5,7 @@ from pathlib import Path
 
 import wechat_publish.html_processor as html_processor_module
 from wechat_publish.html_processor import (
+    apply_layout_ornaments,
     convert_links_to_footnotes,
     discover_images,
     inline_css,
@@ -503,3 +504,61 @@ class TestCodeBlockScrollInlining:
         btn_style = re.search(r'style="([^"]*)"', result[tag_start:tag_end])
         assert btn_style is not None
         assert "position:absolute" in btn_style.group(1)
+
+
+# ── apply_layout_ornaments (classic layout decorations) ─────────
+
+
+class TestApplyLayoutOrnaments:
+    def test_non_classic_layout_is_a_noop(self):
+        html = "<p>a</p><hr><p>b</p>"
+        for layout in ("default", "serif", "terminal", "card"):
+            assert apply_layout_ornaments(html, layout=layout) == html, layout
+
+    def test_converts_hr_to_divider_section(self):
+        result = apply_layout_ornaments("<p>a</p><hr><p>b</p>", layout="classic")
+        assert "<hr" not in result
+        assert 'class="orn-divider"' in result
+        assert "✦ ❖ ✦" in result
+        # The divider replaces the hr in place.
+        assert result.index("orn-divider") < result.index("<p>b</p>")
+
+    def test_appends_exactly_one_end_marker(self):
+        result = apply_layout_ornaments("<p>a</p><hr><p>b</p>", layout="classic")
+        assert result.count('class="orn-end"') == 1
+        assert "❦" in result
+        assert result.rstrip().endswith("</section>")
+
+    def test_end_marker_appended_even_without_hr(self):
+        result = apply_layout_ornaments("<p>only text</p>", layout="classic")
+        assert result.count('class="orn-end"') == 1
+        assert "orn-divider" not in result
+
+    def test_is_idempotent(self):
+        html = "<p>a</p><hr><p>b</p>"
+        once = apply_layout_ornaments(html, layout="classic")
+        twice = apply_layout_ornaments(once, layout="classic")
+        assert twice == once
+
+    def test_ornaments_survive_sanitize(self):
+        decorated = apply_layout_ornaments("<p>a</p><hr>", layout="classic")
+        cleaned = sanitize_html_fragment(decorated)
+        assert 'class="orn-divider"' in cleaned
+        assert 'class="orn-end"' in cleaned
+        assert "✦ ❖ ✦" in cleaned
+        assert "❦" in cleaned
+
+    def test_ornaments_inlined_in_full_pipeline(self):
+        css = """
+        .wechat-content .orn-divider { text-align: center; letter-spacing: 0.6em; }
+        .wechat-content .orn-end { text-align: center; color: #888; }
+        """
+        decorated = apply_layout_ornaments("<p>a</p><hr>", layout="classic")
+        result = process_article_html(decorated, css)
+        div_start = result.find('class="orn-divider"')
+        assert div_start != -1
+        tag_start = result.rfind("<section", 0, div_start)
+        tag_end = result.find(">", div_start)
+        style = re.search(r'style="([^"]*)"', result[tag_start:tag_end])
+        assert style is not None
+        assert "letter-spacing:0.6em" in style.group(1)

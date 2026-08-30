@@ -246,7 +246,7 @@ class TestResolveThemeCssRouting:
         assert css == ""
 
 
-# ── 配色 × 版式 matrix smoke (default layout x 8 palettes) ───────
+# ── 配色 × 版式 matrix smoke (5 layouts x 8 palettes) ────────────
 
 
 def _pygments_token_color(style_name: str) -> str:
@@ -267,19 +267,74 @@ def _pygments_token_color(style_name: str) -> str:
     raise AssertionError(f"pygments style '{style_name}' has no token color")
 
 
-class TestLayoutPaletteMatrix:
-    """default 版式 × 8 个内置色板的全组合冒烟。
+def _inlined_style(html: str, anchor: str, open_tag: str) -> str | None:
+    """The inlined ``style`` attribute of the tag whose body contains *anchor*.
 
-    The layout is rendered through ``theme_engine.render_css`` (the CLI's
-    ``--layout``/``--palette`` path) and must satisfy the same WeChat-safe
-    contracts as the preset path for every palette.
+    *anchor* is matched inside the opening tag (e.g. ``class="copy-btn"``);
+    *open_tag* is the literal tag opening the element (e.g. ``<span``), used
+    to locate the start of the tag that carries the attribute.
+    """
+    anchor_at = html.find(anchor)
+    if anchor_at == -1:
+        return None
+    tag_start = html.rfind(open_tag, 0, anchor_at)
+    if tag_start == -1:
+        return None
+    tag_end = html.find(">", anchor_at)
+    if tag_end == -1:
+        return None
+    # premailer switches the style attribute to single quotes when the value
+    # itself contains double quotes (e.g. font stacks); the backreference
+    # accepts either quote style and tolerates the opposite quote inside.
+    match = re.search(r"style=([\"'])(.*?)\1", html[tag_start:tag_end + 1], re.DOTALL)
+    return match.group(2) if match else None
+
+
+class TestLayoutPaletteMatrix:
+    """5 版式 × 8 色板的全组合冒烟。
+
+    Every combination is rendered through ``theme_engine.render_css`` (the
+    CLI's ``--layout``/``--palette`` path) and must satisfy the WeChat-safe
+    contracts (scroll carrier, copy button, pygments scheme) plus a
+    per-layout identity assertion proving the layout stylesheet actually
+    took effect after inlining.
     """
 
+    def _assert_layout_identity(self, layout: str, html: str):
+        if layout == "serif":
+            root_style = _inlined_style(html, 'class="wechat-content"', "<section")
+            assert root_style is not None, layout
+            assert "georgia" in root_style.lower(), layout
+        elif layout == "terminal":
+            pre_start = html.find("<pre")
+            assert pre_start != -1, layout
+            pre_end = html.find(">", pre_start)
+            pre_style = re.search(r"style=([\"'])(.*?)\1", html[pre_start:pre_end + 1], re.DOTALL)
+            assert pre_style is not None, layout
+            # 全局直角：border-radius 的值必须是纯 0（而非 "0 0 8px 8px"）。
+            assert re.search(r'border-radius:0(?:"|;|$)', pre_style.group(2)), (
+                pre_style.group(2)
+            )
+        elif layout == "card":
+            bq_start = html.find("<blockquote")
+            assert bq_start != -1, layout
+            bq_end = html.find(">", bq_start)
+            bq_style = re.search(r"style=([\"'])(.*?)\1", html[bq_start:bq_end + 1], re.DOTALL)
+            assert bq_style is not None, layout
+            assert "background" in bq_style.group(2), layout
+            assert "border-radius" in bq_style.group(2), layout
+        elif layout == "classic":
+            root_style = _inlined_style(html, 'class="wechat-content"', "<section")
+            assert root_style is not None, layout
+            assert "kaiti" in root_style.lower(), layout
+        # "default" carries no identity of its own beyond the shared base.
+
+    @pytest.mark.parametrize("layout", sorted(theme_engine.BUILTIN_LAYOUTS))
     @pytest.mark.parametrize("palette_name", sorted(BUILTIN_THEMES))
-    def test_default_layout_x_palette_smoke(self, palette_name: str):
+    def test_layout_x_palette_smoke(self, layout: str, palette_name: str):
         palette = theme_engine.load_palette(palette_name)
-        css = theme_engine.render_css("default", palette_name)
-        assert css.strip(), palette_name
+        css = theme_engine.render_css(layout, palette_name)
+        assert css.strip(), (layout, palette_name)
 
         raw = render_markdown_to_html(
             SAMPLE_PATH.read_text(encoding="utf-8"),
@@ -288,33 +343,68 @@ class TestLayoutPaletteMatrix:
         html = process_article_html(raw, css)
 
         # Palette identity color (strong emphasis) survives inlining.
-        assert palette["strong_color"] in html, palette_name
+        assert palette["strong_color"] in html, (layout, palette_name)
 
-        # Code element carries the wu5 scroll contract verbatim.
+        # Code element carries the WeChat-safe scroll contract verbatim.
         pre_start = html.find("<pre")
-        assert pre_start != -1, palette_name
+        assert pre_start != -1, (layout, palette_name)
         code_seg = html[pre_start: html.find("</code>", pre_start)]
-        assert "display:block" in code_seg, palette_name
-        assert "overflow-x:auto" in code_seg, palette_name
-        assert "-webkit-overflow-scrolling:touch" in code_seg, palette_name
-        assert "white-space:pre" in code_seg, palette_name
+        assert "display:block" in code_seg, (layout, palette_name)
+        assert "overflow-x:auto" in code_seg, (layout, palette_name)
+        assert "-webkit-overflow-scrolling:touch" in code_seg, (layout, palette_name)
+        assert "white-space:pre" in code_seg, (layout, palette_name)
 
         # Table scroll wrapper got the touch-scroll style inlined.
         scroll_start = html.find('class="table-scroll"')
-        assert scroll_start != -1, palette_name
+        assert scroll_start != -1, (layout, palette_name)
         scroll_seg = html[scroll_start: html.find("<table", scroll_start)]
-        assert "-webkit-overflow-scrolling:touch" in scroll_seg, palette_name
+        assert "-webkit-overflow-scrolling:touch" in scroll_seg, (layout, palette_name)
 
         # Copy button is an absolutely positioned span in the body.
         copy_start = html.find('class="copy-btn"')
-        assert copy_start != -1, palette_name
+        assert copy_start != -1, (layout, palette_name)
         tag_start = html.rfind("<span", 0, copy_start)
         tag_end = html.find(">", copy_start)
         btn_style = re.search(r'style="([^"]*)"', html[tag_start:tag_end])
-        assert btn_style is not None, palette_name
-        assert "position:absolute" in btn_style.group(1), palette_name
+        assert btn_style is not None, (layout, palette_name)
+        assert "position:absolute" in btn_style.group(1), (layout, palette_name)
 
         # code_scheme drives the pygments style: the mapped palette's
         # representative token color appears in the highlighted code.
         token_color = _pygments_token_color(palette["code_scheme"])
-        assert f"color:#{token_color}" in html, (palette_name, token_color)
+        assert f"color:#{token_color}" in html, (layout, palette_name, token_color)
+
+        # The layout stylesheet actually took effect after inlining.
+        self._assert_layout_identity(layout, html)
+
+
+class TestBuiltinLayoutRegistry:
+    """Registry invariants for the four landed layouts."""
+
+    def test_every_registered_layout_is_implemented(self):
+        for name, entry in theme_engine.BUILTIN_LAYOUTS.items():
+            assert entry.get("implemented", True) is True, name
+            assert theme_engine.render_css(name, "default").strip(), name
+
+    def test_only_classic_declares_ornaments(self):
+        for name, entry in theme_engine.BUILTIN_LAYOUTS.items():
+            assert bool(entry.get("ornaments")) == (name == "classic"), name
+
+    @pytest.mark.parametrize("name", ["serif", "terminal", "card", "classic"])
+    def test_layout_owns_its_stylesheet(self, name: str):
+        assert theme_engine.BUILTIN_LAYOUTS[name]["partials"] == (name,), name
+        css = theme_engine.render_css(name, "default")
+        expected_marker = {
+            "serif": "Georgia",
+            "terminal": "monospace",
+            "card": "border-radius: 12px",
+            "classic": "KaiTi",
+        }[name]
+        assert expected_marker in css, name
+
+    def test_layout_css_never_hardcodes_hex_colors(self):
+        for name in ("serif", "terminal", "card", "classic"):
+            template = theme_engine._load_template(
+                theme_engine._LAYOUTS_DIR / f"{name}.css"
+            ).template
+            assert "#3e3e3e" not in template and "#07c160" not in template, name

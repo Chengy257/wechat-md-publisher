@@ -1,0 +1,190 @@
+/* serif 版式 — 期刊衬线风：全文衬线栈、居中加大的一级标题、放宽的行距段距、
+ * 去底色的双侧细线引用（期刊旁注气质）。颜色全部经 token 占位符注入色板。
+ */
+
+/* 根容器 — 衬线栈 + 期刊级行距 */
+.wechat-content {
+  font-family: Georgia, "Times New Roman", STSong, SimSun, serif;
+  font-size: 16px;
+  line-height: 1.9;
+  color: $text;
+  letter-spacing: 0.02em;
+}
+
+/* 一级标题 — 居中加大 */
+.wechat-content h1 {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: $h1_color;
+  margin: 1.8em 0 1.2em;
+  letter-spacing: 0.05em;
+}
+
+/* 二级标题 — 衬线 + 细底线 */
+.wechat-content h2 {
+  font-size: 19px;
+  font-weight: bold;
+  color: $h1_color;
+  margin: 2em 0 1.2em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid $h2_bottom_border;
+}
+
+/* 三级标题（含微信兼容的 .h3-like）— 衬线延续 */
+.wechat-content h3,
+.wechat-content .h3-like {
+  font-family: Georgia, "Times New Roman", STSong, SimSun, serif;
+  font-size: 17px;
+  font-weight: bold;
+  color: $h3_color;
+  margin: $h3_margin;
+  line-height: 1.6;
+  text-align: left;
+}
+
+/* 段落 — 段距拉大（行距由根容器 1.9 承担） */
+.wechat-content p {
+  margin: 1.5em 0;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+/* 引用 — 去底色，双侧留白 + 左右细线 */
+.wechat-content blockquote {
+  margin: 1.8em 1.5em;
+  padding: 0.2em 1em;
+  border-left: 1px solid $blockquote_border;
+  border-right: 1px solid $blockquote_border;
+  border-radius: 0;
+  background: transparent;
+  color: $muted;
+  font-style: italic;
+}
+
+.wechat-content blockquote p {
+  margin: 0.4em 0;
+  font-size: 15px;
+  color: $muted;
+}
+
+/* 行内代码 — 衬线正文中的等宽孤岛 */
+.wechat-content code {
+  font-family: $code_font;
+  font-size: 14px;
+  color: $code_inline_color;
+  background: $code_inline_bg;
+  padding: $code_inline_padding;
+  border-radius: 4px;
+}
+
+/* 代码块容器 — 素净圆角 */
+.wechat-content pre {
+  font-size: 14px;
+  border-radius: $radius;
+  padding: 16px;
+  margin: 1.2em 0;
+  background: $code_bg;
+  border: 1px solid $code_border;
+}
+
+/* 代码块内 code — 显式压掉行内代码外观 */
+.wechat-content pre code {
+  display: block;
+  padding: 0;
+  color: $pre_code_color;
+  background: transparent;
+  font-size: 13px;
+  border-radius: 0;
+}
+
+/* 列表 */
+.wechat-content ul,
+.wechat-content ol {
+  margin: 1em 0;
+  padding-left: 1.6em;
+  color: $text;
+}
+
+.wechat-content li {
+  margin: 0.5em 0;
+  color: $text;
+}
+
+.list-item {
+  margin: 0 0 10px;
+  line-height: 1.9;
+  text-align: justify;
+}
+
+/* 链接 — 下边框细线 */
+.wechat-content a {
+  color: $link;
+  text-decoration: none;
+  border-bottom: 1px solid $link;
+}
+
+/* 图片 */
+.wechat-content img {
+  display: block;
+  max-width: 100%;
+  margin: 1.2em auto;
+  border-radius: $img_radius;
+}
+
+.wechat-content figcaption {
+  text-align: center;
+  color: $figcaption_color;
+  font-size: 14px;
+  margin: 0.3em 0 1.2em;
+}
+
+/* 分隔线 — 居中短线 */
+.wechat-content hr {
+  border: none;
+  height: 1px;
+  width: 40%;
+  margin: 2.5em auto;
+  background: $hr_color;
+}
+
+/* 表格 — 保持简洁细线 */
+.wechat-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.2em 0;
+  font-size: 13px;
+}
+
+.wechat-content th,
+.wechat-content td {
+  border: 1px solid $table_border;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.wechat-content th {
+  font-weight: bold;
+  background: $th_bg;
+  white-space: nowrap;
+  color: $th_color;
+}
+
+/* 脚注区 */
+.footnotes {
+  margin-top: 2.5em;
+  padding-top: 1em;
+  border-top: 1px solid $footnotes_border;
+  font-size: 14px;
+  color: $footnotes_color;
+}
+
+.footnotes ol {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.footnotes li {
+  margin-bottom: $footnotes_li_margin;
+  color: $footnotes_li_color;
+}
