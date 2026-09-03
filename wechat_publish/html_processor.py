@@ -202,9 +202,10 @@ def _decorate_code_blocks(soup: BeautifulSoup) -> None:
     with a non-breaking space — WeChat has no pseudo-elements and clears
     empty nodes) plus a ``span.codeblock-lang`` label only when the code
     declares a non-mermaid ``language-X`` class, and always ends with a
-    ``span.copy-btn`` ("复制代码"): a static styled span in the WeChat body
-    (no JS possible there), which the local preview wires up as a real
-    copy button.
+    ``span.copy-btn`` holding two nested ``span.copy-icon`` squares that
+    draw a copy glyph with CSS borders (the WeChat body has no JS, no SVG
+    and no pseudo-elements): the span is static in the WeChat body, while
+    the local preview wires it up as a real copy button.
     Mermaid blocks are left untouched so the mermaid renderer can re-read
     their newlines verbatim.
     """
@@ -239,7 +240,14 @@ def _decorate_code_blocks(soup: BeautifulSoup) -> None:
             label.string = lang
             bar.append(label)
         copy_btn = soup.new_tag("span", attrs={"class": "copy-btn"})
-        copy_btn.string = "复制代码"
+        # The copy glyph is two overlapping squares drawn with CSS borders
+        # (back square first so the front one paints on top). Like the dots,
+        # each span is padded with a non-breaking space so WeChat's editor
+        # does not clear it.
+        for icon_class in ("copy-icon-back", "copy-icon-front"):
+            icon = soup.new_tag("span", attrs={"class": f"copy-icon {icon_class}"})
+            icon.append(NavigableString("\u00a0"))
+            copy_btn.append(icon)
         bar.append(copy_btn)
         pre.replace_with(wrapper)
         wrapper.append(bar)

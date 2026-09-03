@@ -100,12 +100,15 @@
   border-radius: 0;
 }
 
-/* 代码块条 — 从简：与代码同底色，dots 结构保留但视觉隐藏 */
+/* 代码块条 — 从简：与代码同底色。dots 隐藏后栏内无流内内容，
+   需显式高度承载右上角的复制图标（22px 热区依赖 top:50% 居中） */
 .wechat-content .codeblock-bar {
   background: $code_bg;
   border: 1px solid $code_border;
   border-bottom: none;
   border-radius: 0;
+  padding: 0 12px;
+  height: 28px;
 }
 
 .wechat-content .codeblock-dot {
@@ -113,11 +116,15 @@
 }
 
 .wechat-content .codeblock-lang {
-  right: 60px;
+  top: 4px;
 }
 
 .wechat-content .copy-btn {
   border-radius: 0;
+}
+
+.wechat-content .copy-icon-front {
+  background: $code_bg;
 }
 
 /* 代码块内 pre/code — 直角（滚动契约在 common partial 中逐字保留） */

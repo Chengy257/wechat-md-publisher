@@ -364,10 +364,16 @@ class TestCodeBlockDecoration:
         assert '<span class="codeblock-dot dot-yellow">\u00a0</span>' in result
         assert '<span class="codeblock-dot dot-green">\u00a0</span>' in result
 
-    def test_bar_ends_with_copy_button(self):
+    def test_bar_ends_with_copy_icon(self):
         html = '<pre><code class="language-python">x = 1</code></pre>'
         result = make_wechat_compatible(html)
-        assert '<span class="copy-btn">复制代码</span>' in result
+        assert '<span class="copy-btn">' in result
+        # The glyph is two CSS-drawn squares, each padded with a
+        # non-breaking space so WeChat does not clear the node.
+        assert '<span class="copy-icon copy-icon-back">\u00a0</span>' in result
+        assert '<span class="copy-icon copy-icon-front">\u00a0</span>' in result
+        # No Chinese button label anywhere in the WeChat body.
+        assert "复制代码" not in result
         # The copy button comes after the lang label (or the dots) in the bar.
         assert result.find("copy-btn") < result.find("<pre>")
 
@@ -377,8 +383,9 @@ class TestCodeBlockDecoration:
         assert 'class="codeblock"' in result
         assert 'class="codeblock-bar"' in result
         assert "codeblock-lang" not in result
-        # The copy button is always present, even without a language label.
-        assert '<span class="copy-btn">复制代码</span>' in result
+        # The copy icon is always present, even without a language label.
+        assert '<span class="copy-btn">' in result
+        assert "复制代码" not in result
 
     def test_mermaid_block_not_decorated(self):
         html = '<pre><code class="language-mermaid">graph TD\nA-->B</code></pre>'
@@ -416,8 +423,10 @@ _CODEBLOCK_CSS = """
 .wechat-content .dot-red { background-color: #ff5f56; }
 .wechat-content .dot-yellow { background-color: #ffbd2e; }
 .wechat-content .dot-green { background-color: #27c93f; }
-.wechat-content .codeblock-lang { position: absolute; right: 88px; top: 8px; font-size: 12px; }
-.wechat-content .copy-btn { position: absolute; right: 12px; top: 5px; padding: 1px 10px; font-size: 12px; line-height: 1.6; border: 1px solid #d0d7de; border-radius: 6px; background: #fff; color: #57606a; }
+.wechat-content .codeblock-lang { position: absolute; right: 44px; top: 8px; font-size: 12px; }
+.wechat-content .copy-btn { position: absolute; right: 8px; top: 50%; margin-top: -11px; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 4px; color: #57606a; }
+.wechat-content .copy-icon { display: inline-block; width: 8px; height: 8px; border: 1px solid #57606a; border-radius: 2px; font-size: 0; line-height: 0; overflow: hidden; vertical-align: middle; }
+.wechat-content .copy-icon-front { position: relative; background: #eef1f4; }
 .wechat-content .codeblock pre { margin: 0; border-radius: 0 0 8px 8px; }
 .wechat-content .codeblock pre code {
   display: block;

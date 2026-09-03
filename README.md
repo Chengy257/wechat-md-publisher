@@ -98,7 +98,7 @@
 ```
 
 - 样式解析优先级：`--style` 文件 > `--layout` + `--palette` > `--theme` 预设 > 项目 `config/style.css` > 内置 `default` 兜底
-- **表格与代码块排版**：表格单元格统一左对齐（忽略 markdown 对齐语法产生的内联 text-align）；表格自动包进横向滚动容器（`section.table-scroll`），宽表格在手机上可横向滚动查看全部列；带语言标注的代码块顶部显示语言条（`codeblock-bar`），长代码行可横向滚动；本地 preview 的每个代码块带"复制"按钮（微信正文保持零 JavaScript，复制按钮仅存在于 `build/*.preview.html`）
+- **表格与代码块排版**：表格单元格统一左对齐（忽略 markdown 对齐语法产生的内联 text-align）；表格自动包进横向滚动容器（`section.table-scroll`），宽表格在手机上可横向滚动查看全部列；带语言标注的代码块顶部显示语言条（`codeblock-bar`），长代码行可横向滚动；每个代码块右上角带复制图标（`span.copy-btn` 内两个 CSS 方框绘制，随调色板 `copy_btn_color` 变色；微信正文保持零 JavaScript，图标在正文中仅为装饰，真实复制交互只存在于 `build/*.preview.html`：点击后短暂显示绿色 ✓）
 - **图片处理**：正文图自动上传（`media/uploadimg`，仅支持 JPG/PNG 且 ≤1MB）并替换 src；封面走永久素材（`material/add_material`，支持 JPG/JPEG/PNG/BMP/GIF 且 ≤10MB）；按接口拆分白名单并校验真实字节格式（魔数嗅探 + Pillow 可用时解码校验，伪图片/后缀与内容不符一律拒绝）；sha256 缓存避免重复上传；`--compress-cover` 可选 Pillow 压缩（AI 生成的封面始终自动压缩）
 - **AI 增强**（可选）：`--ai-summary` 生成摘要（OpenAI 兼容接口，默认 DeepSeek）、`--ai-cover` 生成封面（Gemini，默认模型 `gemini-2.5-flash-image`，通过正式 API 参数 `imageConfig.aspectRatio: 21:9` 控制封面比例，并对返回图片做 MIME 与 Pillow 解码校验）
 - **Mermaid 图表**：`--mermaid` 本地渲染（mmdc，Windows 下自动兼容 `.cmd`）或在线 API（`--mermaid-engine api`），按内容 hash 缓存

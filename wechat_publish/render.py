@@ -199,13 +199,21 @@ def _wrap_preview(body_html: str, title: str = "") -> str:
         ".codeblock-bar .dot-red { background-color: #ff5f56; }\n"
         ".codeblock-bar .dot-yellow { background-color: #ffbd2e; }\n"
         ".codeblock-bar .dot-green { background-color: #27c93f; }\n"
-        # The .codeblock-lang label carries an inlined position (right: 88px)
-        # inside the article body; the copy button sits at right: 12px.
-        ".codeblock-bar .codeblock-lang { position: absolute; right: 88px; top: 8px; }\n"
-        ".copy-btn { position: absolute; right: 12px; top: 5px; "
-        "padding: 1px 10px; font-size: 12px; line-height: 1.6; border: 1px solid #d0d7de; "
-        "border-radius: 6px; background: #fff; color: #57606a; cursor: pointer; font-family: inherit; }\n"
-        ".copy-btn.copied { color: #1a7f37; border-color: #1a7f37; }\n"
+        # The .codeblock-lang label carries an inlined position (right: 44px)
+        # inside the article body; the copy icon button sits at right: 8px.
+        ".codeblock-bar .codeblock-lang { position: absolute; right: 44px; top: 8px; }\n"
+        ".copy-btn { position: absolute; right: 8px; top: 50%; margin-top: -11px; "
+        "width: 22px; height: 22px; line-height: 22px; text-align: center; "
+        "border-radius: 4px; color: #57606a; cursor: pointer; font-family: inherit; }\n"
+        ".copy-btn:hover { background: rgba(0, 0, 0, 0.06); }\n"
+        ".copy-btn.copied { color: #1a7f37; }\n"
+        ".copy-btn.copy-error { color: #cf222e; }\n"
+        ".copy-btn .copy-icon { display: inline-block; width: 8px; height: 8px; "
+        "border: 1px solid #57606a; border-radius: 2px; font-size: 0; line-height: 0; "
+        "overflow: hidden; vertical-align: middle; }\n"
+        ".copy-btn .copy-icon-back { position: relative; left: 8px; top: -3px; }\n"
+        ".copy-btn .copy-icon-front { position: relative; left: -6px; top: 3px; "
+        "background: #eef1f4; }\n"
         "</style>\n"
         "</head>\n"
         "<body>\n"
@@ -221,12 +229,15 @@ def _wrap_preview(body_html: str, title: str = "") -> str:
 
 # Local preview only: the WeChat article body stays JavaScript-free, but the
 # browser preview can wire a clipboard handler onto each code block's bar.
-# The article body already carries a static span.copy-btn (WeChat shows it as
-# a styled label), so prefer binding that; only fall back to creating a
-# button when the bar has none (e.g. bare HTML pasted into the preview).
+# The article body already carries a static span.copy-btn (two CSS-drawn
+# squares forming a copy icon), so prefer binding that; only fall back to
+# creating a button when the bar has none (e.g. bare HTML pasted into the
+# preview). On success the icon briefly turns into a green check mark.
 _PREVIEW_COPY_SCRIPT = (
     "<script>\n"
     "(function () {\n"
+    "  var ICON = '<span class=\"copy-icon copy-icon-back\">\\u00a0</span>"
+    "<span class=\"copy-icon copy-icon-front\">\\u00a0</span>';\n"
     "  document.querySelectorAll('.codeblock-bar').forEach(function (bar) {\n"
     "    var container = bar.parentElement;\n"
     "    var pre = container ? container.querySelector(':scope > pre') : null;\n"
@@ -236,21 +247,26 @@ _PREVIEW_COPY_SCRIPT = (
     "      btn = document.createElement('button');\n"
     "      btn.type = 'button';\n"
     "      btn.className = 'copy-btn';\n"
-    "      btn.textContent = '复制代码';\n"
+    "      btn.innerHTML = ICON;\n"
     "      bar.appendChild(btn);\n"
     "    }\n"
     "    if (!code) { return; }\n"
+    "    var iconHTML = btn.innerHTML;\n"
     "    btn.addEventListener('click', function () {\n"
     "      navigator.clipboard.writeText(code.innerText).then(function () {\n"
-    "        btn.textContent = '已复制';\n"
+    "        btn.textContent = '\\u2713';\n"
     "        btn.classList.add('copied');\n"
     "        setTimeout(function () {\n"
-    "          btn.textContent = '复制代码';\n"
+    "          btn.innerHTML = iconHTML;\n"
     "          btn.classList.remove('copied');\n"
-    "        }, 1500);\n"
+    "        }, 1200);\n"
     "      }).catch(function () {\n"
-    "        btn.textContent = '复制失败';\n"
-    "        setTimeout(function () { btn.textContent = '复制代码'; }, 1500);\n"
+    "        btn.textContent = '\\u2715';\n"
+    "        btn.classList.add('copy-error');\n"
+    "        setTimeout(function () {\n"
+    "          btn.innerHTML = iconHTML;\n"
+    "          btn.classList.remove('copy-error');\n"
+    "        }, 1200);\n"
     "      });\n"
     "    });\n"
     "  });\n"

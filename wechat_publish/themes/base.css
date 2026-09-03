@@ -94,21 +94,48 @@
 
 .wechat-content .codeblock-lang {
   position: absolute;
-  right: 88px;
+  right: 44px;
   top: 8px;
   font-size: 12px;
   color: $bar_text;
 }
 
+/* 复制按钮：右上角纯图标（两个叠加小方框，CSS 边框绘制）。
+   微信正文无 JS/SVG/伪元素，静态展示；本地预览由脚本绑定点击。 */
 .wechat-content .copy-btn {
   position: absolute;
-  right: 12px;
-  top: 5px;
-  padding: 1px 10px;
-  font-size: 12px;
-  line-height: 1.6;
-  border: 1px solid $copy_btn_border;
-  border-radius: 6px;
-  background: $copy_btn_bg;
+  right: 8px;
+  top: 50%;
+  margin-top: -11px;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 4px;
   color: $copy_btn_color;
+}
+
+.wechat-content .copy-icon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid $copy_btn_color;
+  border-radius: 2px;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.wechat-content .copy-icon-back {
+  position: relative;
+  left: 8px;
+  top: -3px;
+}
+
+.wechat-content .copy-icon-front {
+  position: relative;
+  left: -6px;
+  top: 3px;
+  background: $bar_bg;
 }
